@@ -1,219 +1,283 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Auto-Fill Google Forms</title>
+    <title>Auto-Fill Forms</title>
     <style>
-      body {
-        width: 300px;
-        padding: 20px;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-        background: #f8f9fa;
+      * {
         margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        width: 320px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        background: #fafafa;
+        color: #2c3e50;
+        line-height: 1.5;
       }
 
       .container {
-        background: white;
+        background: #ffffff;
+        border: 1px solid #e1e8ed;
         border-radius: 8px;
-        padding: 20px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
       }
 
-      h1 {
-        margin: 0 0 16px 0;
+      /* Header */
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        text-align: center;
+      }
+
+      .header h1 {
         font-size: 18px;
         font-weight: 600;
-        color: #1a73e8;
-        text-align: center;
+        margin-bottom: 4px;
       }
 
-      .description {
-        margin-bottom: 20px;
-        font-size: 14px;
-        color: #5f6368;
-        text-align: center;
-        line-height: 1.4;
+      .header p {
+        font-size: 13px;
+        opacity: 0.9;
+        font-weight: 400;
       }
 
-      #fillFormBtn {
+      /* Main Content */
+      .content {
+        padding: 24px;
+      }
+
+      /* Fill Button */
+      .fill-button {
         width: 100%;
-        padding: 12px 16px;
-        background: #1a73e8;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         border: none;
         border-radius: 6px;
+        padding: 14px 20px;
         font-size: 14px;
         font-weight: 500;
         cursor: pointer;
-        transition: background-color 0.2s;
+        transition: all 0.2s ease;
+        margin-bottom: 20px;
       }
 
-      #fillFormBtn:hover {
-        background: #1557b0;
+      .fill-button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
       }
 
-      #fillFormBtn:active {
-        background: #0d47a1;
+      .fill-button:active {
+        transform: translateY(0);
       }
 
-      #fillFormBtn:disabled {
-        background: #dadce0;
-        color: #5f6368;
+      .fill-button:disabled {
+        background: #e1e8ed;
+        color: #8a9ba8;
         cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
       }
 
+      /* Status Message */
       .status {
-        margin-top: 12px;
-        padding: 8px 12px;
-        border-radius: 4px;
+        padding: 12px 16px;
+        border-radius: 6px;
         font-size: 13px;
-        text-align: center;
+        font-weight: 500;
+        margin-bottom: 16px;
         display: none;
       }
 
       .status.success {
-        background: #e8f5e8;
-        color: #137333;
-        border: 1px solid #ceead6;
+        background: #f0f9f0;
+        color: #2d5a2d;
+        border: 1px solid #c8e6c8;
       }
 
       .status.error {
-        background: #fce8e6;
-        color: #d93025;
-        border: 1px solid #fad2cf;
+        background: #fef2f2;
+        color: #991b1b;
+        border: 1px solid #fecaca;
       }
 
+      /* Statistics */
       .stats {
-        margin-top: 16px;
-        padding: 12px;
-        background: #e8f0fe;
-        border: 1px solid #b3d8ff;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
         border-radius: 6px;
-        font-size: 13px;
+        padding: 16px;
         display: none;
       }
 
-      .stats h3 {
-        margin: 0 0 8px 0;
+      .stats-header {
         font-size: 14px;
-        font-weight: 500;
-        color: #1a73e8;
-      }
-
-      .stats-row {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 12px;
         display: flex;
-        justify-content: space-between;
-        margin: 4px 0;
-        padding: 2px 0;
+        align-items: center;
+        gap: 6px;
       }
 
-      .stats-label {
-        color: #5f6368;
+      .stats-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 16px;
       }
 
-      .stats-value {
-        font-weight: 500;
-        color: #1a73e8;
+      .stat-item {
+        text-align: center;
       }
 
-      .detection-details {
-        margin-top: 12px;
-        max-height: 200px;
-        overflow-y: auto;
-        border-top: 1px solid #dadce0;
-        padding-top: 8px;
+      .stat-value {
+        font-size: 20px;
+        font-weight: 700;
+        color: #667eea;
+        line-height: 1;
       }
 
-      .detection-item {
-        margin: 6px 0;
-        padding: 6px 8px;
-        background: white;
-        border-radius: 4px;
+      .stat-label {
         font-size: 11px;
-        border-left: 3px solid #dadce0;
-      }
-
-      .detection-item.matched {
-        border-left-color: #34a853;
-        background: #f8fff8;
-      }
-
-      .detection-item.unmatched {
-        border-left-color: #ea4335;
-        background: #fff8f8;
-      }
-
-      .detection-question {
+        color: #64748b;
+        margin-top: 2px;
         font-weight: 500;
-        color: #3c4043;
-        margin-bottom: 2px;
       }
 
-      .detection-result {
-        color: #5f6368;
-        font-style: italic;
+      /* Results Details */
+      .results {
+        max-height: 120px;
+        overflow-y: auto;
+        border-top: 1px solid #e2e8f0;
+        padding-top: 12px;
       }
 
-      .data-preview {
-        margin-top: 16px;
-        padding: 12px;
-        background: #f1f3f4;
-        border-radius: 4px;
+      .result-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 0;
         font-size: 12px;
-        color: #5f6368;
       }
 
-      .data-preview h3 {
-        margin: 0 0 8px 0;
-        font-size: 13px;
-        font-weight: 500;
-        color: #3c4043;
+      .result-icon {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 600;
+        flex-shrink: 0;
       }
 
-      .data-item {
-        margin: 4px 0;
-        font-family: monospace;
+      .result-icon.success {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .result-icon.error {
+        background: #fef2f2;
+        color: #dc2626;
+      }
+
+      .result-text {
+        color: #374151;
+        line-height: 1.3;
+      }
+
+      /* Scrollbar */
+      .results::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      .results::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 2px;
+      }
+
+      .results::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 2px;
+      }
+
+      .results::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
+      /* Loading State */
+      .loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .spinner {
+        width: 14px;
+        height: 14px;
+        border: 2px solid transparent;
+        border-top: 2px solid currentColor;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* Hidden utility */
+      .hidden {
+        display: none !important;
       }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>🔤 Auto-Fill Forms</h1>
-
-      <div class="description">Click the button below to automatically fill the current Google Form with predefined data.</div>
-
-      <button id="fillFormBtn">Fill Form</button>
-
-      <div id="status" class="status"></div>
-
-      <div id="stats" class="stats">
-        <h3>📊 Statistiques</h3>
-        <div class="stats-row">
-          <span class="stats-label">Champs détectés:</span>
-          <span class="stats-value" id="fieldsDetected">-</span>
-        </div>
-        <div class="stats-row">
-          <span class="stats-label">Champs remplis:</span>
-          <span class="stats-value" id="fieldsFilled">-</span>
-        </div>
-        <div class="stats-row">
-          <span class="stats-label">Taux de réussite:</span>
-          <span class="stats-value" id="successRate">-</span>
-        </div>
-
-        <div class="detection-details" id="detectionDetails">
-          <!-- Detection results will be populated here -->
-        </div>
+      <!-- Header -->
+      <div class="header">
+        <h1>Auto-Fill Forms</h1>
+        <p>Remplissage automatique intelligent</p>
       </div>
 
-      <div class="data-preview">
-        <h3>Données d'exemple:</h3>
-        <div class="data-item"><strong>Nom:</strong> KONE</div>
-        <div class="data-item"><strong>Prénom:</strong> Amadou</div>
-        <div class="data-item"><strong>Email:</strong> amadou.kone@example.com</div>
-        <div class="data-item"><strong>Téléphone:</strong> +225 07 08 09 10 11</div>
-        <div class="data-item">+ plus de 40 champs...</div>
+      <!-- Content -->
+      <div class="content">
+        <!-- Fill Button -->
+        <button id="fillFormBtn" class="fill-button">
+          <span class="button-text">Remplir le formulaire</span>
+        </button>
+
+        <!-- Status Message -->
+        <div id="status" class="status"></div>
+
+        <!-- Statistics -->
+        <div id="stats" class="stats">
+          <div class="stats-header">📊 Résultats</div>
+
+          <div class="stats-grid">
+            <div class="stat-item">
+              <div class="stat-value" id="fieldsDetected">-</div>
+              <div class="stat-label">Détectés</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="fieldsFilled">-</div>
+              <div class="stat-label">Remplis</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="successRate">-</div>
+              <div class="stat-label">Réussite</div>
+            </div>
+          </div>
+
+          <div class="results" id="results"></div>
+        </div>
       </div>
     </div>
 

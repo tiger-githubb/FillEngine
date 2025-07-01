@@ -1,42 +1,47 @@
 /**
  * Popup Script for Auto-Fill Google Forms Extension
- * Handles popup UI interactions and communication with content script
+ * Modern, minimal UI with clean interactions
  */
 
+"use strict";
+
 document.addEventListener("DOMContentLoaded", function () {
+  // DOM Elements
   const fillFormBtn = document.getElementById("fillFormBtn");
+  const buttonText = fillFormBtn.querySelector(".button-text");
   const statusDiv = document.getElementById("status");
   const statsDiv = document.getElementById("stats");
   const fieldsDetectedSpan = document.getElementById("fieldsDetected");
   const fieldsFilledSpan = document.getElementById("fieldsFilled");
   const successRateSpan = document.getElementById("successRate");
-  const detectionDetailsDiv = document.getElementById("detectionDetails");
-
-  console.log("Popup loaded");
+  const resultsDiv = document.getElementById("results");
 
   /**
    * Shows a status message to the user
    * @param {string} message - The message to display
-   * @param {string} type - The type of message ('success' or 'error')
+   * @param {string} type - 'success' or 'error'
    */
   function showStatus(message, type = "success") {
     statusDiv.textContent = message;
     statusDiv.className = `status ${type}`;
     statusDiv.style.display = "block";
 
-    // Hide status after 5 seconds
-    setTimeout(() => {
-      statusDiv.style.display = "none";
-    }, 5000);
+    // Auto-hide success messages after 4 seconds
+    if (type === "success") {
+      setTimeout(() => {
+        statusDiv.style.display = "none";
+      }, 4000);
+    }
   }
 
   /**
-   * Updates the statistics display
-   * @param {Object} stats - The statistics object from the content script
+   * Updates the statistics display with clean modern styling
+   * @param {Object} stats - Statistics from the content script
    */
   function updateStats(stats) {
     if (!stats) return;
 
+    // Update stat numbers
     fieldsDetectedSpan.textContent = stats.fieldsDetected || 0;
     fieldsFilledSpan.textContent = stats.fieldsFilled || 0;
 
@@ -46,123 +51,170 @@ document.addEventListener("DOMContentLoaded", function () {
     // Show stats section
     statsDiv.style.display = "block";
 
-    // Update detection details
-    if (stats.detectionResults && stats.detectionResults.length > 0) {
-      detectionDetailsDiv.innerHTML = "";
+    // Update detailed results
+    updateResults(stats.detectionResults || []);
+  }
 
-      stats.detectionResults.forEach((result, index) => {
-        const itemDiv = document.createElement("div");
-        itemDiv.className = `detection-item ${result.matched ? "matched" : "unmatched"}`;
+  /**
+   * Updates the detailed results section
+   * @param {Array} results - Array of detection results
+   */
+  function updateResults(results) {
+    resultsDiv.innerHTML = "";
 
-        const questionDiv = document.createElement("div");
-        questionDiv.className = "detection-question";
-        questionDiv.textContent = `${index + 1}. ${result.questionLabel}`;
+    if (results.length === 0) return;
 
-        const resultDiv = document.createElement("div");
-        resultDiv.className = "detection-result";
+    // Show only filled fields for cleaner display
+    const filledResults = results.filter((result) => result.matched);
 
-        if (result.matched) {
-          resultDiv.textContent = `✅ Rempli: ${result.key} → ${result.value.substring(0, 30)}${
-            result.value.length > 30 ? "..." : ""
-          }`;
-        } else {
-          resultDiv.textContent = "❌ Non rempli - Aucune correspondance trouvée";
-        }
+    filledResults.forEach((result, index) => {
+      const resultItem = document.createElement("div");
+      resultItem.className = "result-item";
 
-        itemDiv.appendChild(questionDiv);
-        itemDiv.appendChild(resultDiv);
-        detectionDetailsDiv.appendChild(itemDiv);
-      });
+      const icon = document.createElement("div");
+      icon.className = `result-icon ${result.matched ? "success" : "error"}`;
+      icon.textContent = result.matched ? "✓" : "✗";
+
+      const text = document.createElement("div");
+      text.className = "result-text";
+
+      if (result.matched) {
+        const truncatedValue = result.value.length > 25 ? result.value.substring(0, 25) + "..." : result.value;
+        text.textContent = `${result.questionLabel} → ${truncatedValue}`;
+      } else {
+        text.textContent = result.questionLabel;
+      }
+
+      resultItem.appendChild(icon);
+      resultItem.appendChild(text);
+      resultsDiv.appendChild(resultItem);
+    });
+
+    // Show unfilled fields count if any
+    const unfilledCount = results.length - filledResults.length;
+    if (unfilledCount > 0) {
+      const summaryItem = document.createElement("div");
+      summaryItem.className = "result-item";
+      summaryItem.style.marginTop = "8px";
+      summaryItem.style.borderTop = "1px solid #e2e8f0";
+      summaryItem.style.paddingTop = "8px";
+
+      const icon = document.createElement("div");
+      icon.className = "result-icon error";
+      icon.textContent = "!";
+
+      const text = document.createElement("div");
+      text.className = "result-text";
+      text.style.color = "#64748b";
+      text.textContent = `${unfilledCount} champ(s) non rempli(s)`;
+
+      summaryItem.appendChild(icon);
+      summaryItem.appendChild(text);
+      resultsDiv.appendChild(summaryItem);
     }
   }
 
   /**
-   * Checks if the current tab is a Google Forms page
-   * @returns {Promise<boolean>} Whether the current tab is a Google Forms page
+   * Sets the loading state of the button
+   * @param {boolean} loading - Whether to show loading state
+   */
+  function setButtonLoading(loading) {
+    if (loading) {
+      fillFormBtn.disabled = true;
+      buttonText.innerHTML = '<span class="loading"><span class="spinner"></span>Remplissage...</span>';
+    } else {
+      fillFormBtn.disabled = false;
+      buttonText.textContent = "Remplir le formulaire";
+    }
+  }
+
+  /**
+   * Checks if current tab is a Google Forms page
+   * @returns {Promise<boolean>}
    */
   async function isGoogleFormsPage() {
     return new Promise((resolve) => {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const currentTab = tabs[0];
-        const isFormsPage = currentTab && currentTab.url && currentTab.url.includes("docs.google.com/forms/");
+        const isFormsPage = currentTab?.url?.includes("docs.google.com/forms/");
         resolve(isFormsPage);
       });
     });
   }
 
   /**
-   * Handles the fill form button click
+   * Main form filling handler
    */
   async function handleFillForm() {
-    console.log("Fill form button clicked");
-
     // Check if we're on a Google Forms page
     const isFormsPage = await isGoogleFormsPage();
     if (!isFormsPage) {
-      showStatus("Please navigate to a Google Forms page first", "error");
+      showStatus("Veuillez naviguer vers une page Google Forms", "error");
       return;
     }
 
-    // Disable button and show loading state
-    fillFormBtn.disabled = true;
-    fillFormBtn.textContent = "Filling...";
+    // Set loading state
+    setButtonLoading(true);
+    statusDiv.style.display = "none";
+    statsDiv.style.display = "none";
 
     try {
-      // Send message to content script to fill the form
+      // Send message to content script
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         chrome.tabs.sendMessage(tabs[0].id, { action: "fillForm" }, (response) => {
-          // Re-enable button
-          fillFormBtn.disabled = false;
-          fillFormBtn.textContent = "Fill Form";
+          setButtonLoading(false);
 
           if (chrome.runtime.lastError) {
-            console.error("Runtime error:", chrome.runtime.lastError);
-            showStatus("Error: Could not communicate with the page", "error");
+            showStatus("Erreur de communication avec la page", "error");
             return;
           }
 
-          if (response && response.success) {
-            showStatus(response.message || "Formulaire rempli avec succès!", "success");
+          if (response?.success) {
+            const message =
+              response.fieldsFilled > 0
+                ? `${response.fieldsFilled} champ(s) rempli(s) avec succès`
+                : "Aucun champ correspondant trouvé";
+
+            showStatus(message, response.fieldsFilled > 0 ? "success" : "error");
             updateStats(response);
-            console.log("Form filled successfully:", response);
           } else {
-            const errorMessage = response ? response.message : "Erreur inconnue";
-            showStatus("Erreur: " + errorMessage, "error");
-            console.error("Form fill failed:", response);
+            showStatus("Erreur lors du remplissage", "error");
           }
         });
       });
     } catch (error) {
-      // Re-enable button on error
-      fillFormBtn.disabled = false;
-      fillFormBtn.textContent = "Fill Form";
-
-      console.error("Error in handleFillForm:", error);
-      showStatus("Error: " + error.message, "error");
+      setButtonLoading(false);
+      showStatus("Erreur inattendue", "error");
     }
   }
 
-  // Add click event listener to the fill form button
-  fillFormBtn.addEventListener("click", handleFillForm);
+  /**
+   * Initialize the popup
+   */
+  function initialize() {
+    // Add click handler to button
+    fillFormBtn.addEventListener("click", handleFillForm);
 
-  // Check if we're on a Google Forms page and update UI accordingly
-  isGoogleFormsPage().then((isFormsPage) => {
-    if (!isFormsPage) {
-      fillFormBtn.style.background = "#dadce0";
-      fillFormBtn.style.color = "#5f6368";
-      fillFormBtn.title = "Naviguez vers une page Google Forms pour utiliser cette fonctionnalité";
-      showStatus("Naviguez vers une page Google Forms pour utiliser cette extension", "error");
-    }
-  });
+    // Add keyboard support
+    document.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && !fillFormBtn.disabled) {
+        event.preventDefault();
+        handleFillForm();
+      }
+    });
 
-  // Handle keyboard shortcuts
-  document.addEventListener("keydown", function (event) {
-    // Enter key or Space key to trigger fill
-    if ((event.key === "Enter" || event.key === " ") && !fillFormBtn.disabled) {
-      event.preventDefault();
-      handleFillForm();
-    }
-  });
+    // Check initial page state
+    isGoogleFormsPage().then((isFormsPage) => {
+      if (!isFormsPage) {
+        fillFormBtn.disabled = true;
+        fillFormBtn.style.background = "#e1e8ed";
+        fillFormBtn.style.color = "#8a9ba8";
+        fillFormBtn.title = "Naviguez vers une page Google Forms";
+        showStatus("Page Google Forms requise", "error");
+      }
+    });
+  }
 
-  console.log("Popup script initialized");
+  // Initialize when DOM is ready
+  initialize();
 });
