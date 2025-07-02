@@ -64,53 +64,80 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (results.length === 0) return;
 
-    // Show only filled fields for cleaner display
+    // Separate results by categories
     const filledResults = results.filter((result) => result.matched);
+    const noInputResults = results.filter((result) => !result.hasInputField);
+    const unfilledResults = results.filter((result) => result.hasInputField && !result.matched);
 
+    // Show filled fields
     filledResults.forEach((result, index) => {
       const resultItem = document.createElement("div");
       resultItem.className = "result-item";
 
       const icon = document.createElement("div");
-      icon.className = `result-icon ${result.matched ? "success" : "error"}`;
-      icon.textContent = result.matched ? "✓" : "✗";
+      icon.className = "result-icon success";
+      icon.textContent = "✓";
 
       const text = document.createElement("div");
       text.className = "result-text";
-
-      if (result.matched) {
-        const truncatedValue = result.value.length > 25 ? result.value.substring(0, 25) + "..." : result.value;
-        text.textContent = `${result.questionLabel} → ${truncatedValue}`;
-      } else {
-        text.textContent = result.questionLabel;
-      }
+      const truncatedValue = result.value.length > 25 ? result.value.substring(0, 25) + "..." : result.value;
+      text.textContent = `${result.questionLabel} → ${truncatedValue}`;
 
       resultItem.appendChild(icon);
       resultItem.appendChild(text);
       resultsDiv.appendChild(resultItem);
     });
 
-    // Show unfilled fields count if any
-    const unfilledCount = results.length - filledResults.length;
-    if (unfilledCount > 0) {
-      const summaryItem = document.createElement("div");
-      summaryItem.className = "result-item";
-      summaryItem.style.marginTop = "8px";
-      summaryItem.style.borderTop = "1px solid #e2e8f0";
-      summaryItem.style.paddingTop = "8px";
+    // Show summary for unfilled and no-input fields
+    if (unfilledResults.length > 0 || noInputResults.length > 0) {
+      // Add separator if there are filled results
+      if (filledResults.length > 0) {
+        const separator = document.createElement("div");
+        separator.style.borderTop = "1px solid #e2e8f0";
+        separator.style.marginTop = "8px";
+        separator.style.paddingTop = "8px";
+        resultsDiv.appendChild(separator);
+      }
 
-      const icon = document.createElement("div");
-      icon.className = "result-icon error";
-      icon.textContent = "!";
+      // Show unfilled fields with input
+      if (unfilledResults.length > 0) {
+        const summaryItem = document.createElement("div");
+        summaryItem.className = "result-item";
 
-      const text = document.createElement("div");
-      text.className = "result-text";
-      text.style.color = "#64748b";
-      text.textContent = `${unfilledCount} champ(s) non rempli(s)`;
+        const icon = document.createElement("div");
+        icon.className = "result-icon error";
+        icon.textContent = "!";
 
-      summaryItem.appendChild(icon);
-      summaryItem.appendChild(text);
-      resultsDiv.appendChild(summaryItem);
+        const text = document.createElement("div");
+        text.className = "result-text";
+        text.style.color = "#64748b";
+        text.textContent = `${unfilledResults.length} champ(s) avec entrée non rempli(s)`;
+
+        summaryItem.appendChild(icon);
+        summaryItem.appendChild(text);
+        resultsDiv.appendChild(summaryItem);
+      }
+
+      // Show fields without input
+      if (noInputResults.length > 0) {
+        const summaryItem = document.createElement("div");
+        summaryItem.className = "result-item";
+
+        const icon = document.createElement("div");
+        icon.className = "result-icon";
+        icon.style.background = "#f8fafc";
+        icon.style.color = "#64748b";
+        icon.textContent = "?";
+
+        const text = document.createElement("div");
+        text.className = "result-text";
+        text.style.color = "#64748b";
+        text.textContent = `${noInputResults.length} question(s) sans champ d'entrée`;
+
+        summaryItem.appendChild(icon);
+        summaryItem.appendChild(text);
+        resultsDiv.appendChild(summaryItem);
+      }
     }
   }
 

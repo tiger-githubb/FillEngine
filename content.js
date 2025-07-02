@@ -153,6 +153,12 @@ const USER_PROFILE = {
     disabilities: "Aucun",
   },
 
+  // Dates
+  dates: {
+    birthDate: "1990-01-15", // Format YYYY-MM-DD pour les champs date HTML
+    idExpirationDate: "2030-12-31", // Date d'expiration CNI/Passeport
+  },
+
   // Miscellaneous
   misc: {
     examSubjects: "Tous les sujets",
@@ -265,6 +271,29 @@ const FIELD_MAPPINGS = {
       "passeport",
       "numéro cni / passeport",
       "numero cni / passeport",
+    ],
+  },
+
+  // Dates Mappings
+  dates: {
+    birthDate: ["date naissance", "date de naissance", "né le", "nee le", "né(e) le", "birthdate", "birth date", "date birth"],
+    idExpirationDate: [
+      "date expiration",
+      "date d'expiration",
+      "date d'expiration cni / passeport",
+      "date d'expiration cni/passeport",
+      "date expiration cni / passeport",
+      "date expiration cni/passeport",
+      "expire le",
+      "expire",
+      "validité",
+      "valide jusqu'au",
+      "valable jusqu'au",
+      "expiry date",
+      "expiration",
+      "fin validité",
+      "cni expire",
+      "passeport expire",
     ],
   },
 
@@ -388,21 +417,24 @@ const CONFIG = {
     'input[type="text"]',
     'input[type="email"]',
     'input[type="tel"]',
+    'input[type="date"]', // Add date inputs
+    "select", // Add select elements
     "textarea",
     'input[type="radio"]',
     'input[type="checkbox"]',
     // Google Forms specific selectors
     'div[role="radio"]',
     'div[role="checkbox"]',
+    'div[role="listbox"]', // Google Forms dropdowns
     'span[role="radio"]',
     'span[role="checkbox"]',
   ],
 
-  // Field types to skip (removed radio and checkbox)
-  skipFieldTypes: ["date", "time", "datetime-local", "color", "range", "file", "submit", "button", "reset"],
+  // Field types to skip (removed date, radio and checkbox)
+  skipFieldTypes: ["time", "datetime-local", "color", "range", "file", "submit", "button", "reset"],
 
-  // Keywords that indicate special fields to skip (removed radio/checkbox keywords)
-  skipKeywords: ["date", "sélectionn", "select", "choisir"],
+  // Keywords that indicate special fields to skip (removed date, radio/checkbox keywords)
+  skipKeywords: ["sélectionn", "choisir"],
 
   // Special keyword patterns for complex matching
   specialKeywords: {
@@ -435,7 +467,13 @@ function generateFlatDictionary() {
     Object.entries(fields).forEach(([fieldType, variations]) => {
       // Get the value from USER_PROFILE
       let value;
-      if (USER_PROFILE[category] && USER_PROFILE[category][fieldType]) {
+
+      // Special handling for different categories
+      if (category === "dates" && USER_PROFILE.dates && USER_PROFILE.dates[fieldType]) {
+        value = USER_PROFILE.dates[fieldType];
+      } else if (category === "choices" && USER_PROFILE.choices && USER_PROFILE.choices[fieldType]) {
+        value = USER_PROFILE.choices[fieldType];
+      } else if (USER_PROFILE[category] && USER_PROFILE[category][fieldType]) {
         value = USER_PROFILE[category][fieldType];
       } else {
         console.warn(`No value found for ${category}.${fieldType}`);
@@ -560,13 +598,30 @@ class FormDetector {
   }
 
   /**
-   * Finds the input field within a question container (text inputs, radios, checkboxes)
+   * Finds the input field within a question container (all types: text, date, select, radio, checkbox)
    * @param {Element} container - The question container element
    * @returns {Element|null} The input element
    */
   static findInputField(container) {
-    // Look for any supported input field types
-    let input = container.querySelector(CONFIG.inputSelectors.join(", "));
+    // Look for any supported input field types (including date)
+    let input = container.querySelector(
+      [
+        'input[type="text"]',
+        'input[type="email"]',
+        'input[type="tel"]',
+        'input[type="date"]', // Add date inputs
+        "textarea",
+        'input[type="radio"]',
+        'input[type="checkbox"]',
+        "select", // Add select elements
+        // Google Forms specific selectors
+        'div[role="radio"]',
+        'div[role="checkbox"]',
+        'div[role="listbox"]', // Add Google Forms select
+        'span[role="radio"]',
+        'span[role="checkbox"]',
+      ].join(", ")
+    );
 
     // Special handling for Google Forms radio/checkbox groups
     if (!input) {
@@ -583,28 +638,35 @@ class FormDetector {
         const firstCheckbox = checkboxGroup.querySelector('div[role="checkbox"]');
         if (firstCheckbox) return firstCheckbox;
       }
+
+      // Look for Google Forms select/dropdown
+      const selectGroup = container.querySelector(".jgvuAb"); // Google Forms select class
+      if (selectGroup) {
+        return selectGroup;
+      }
     }
 
     // If not found, try inputs without type (which default to text)
     if (!input) {
       const candidateInput = container.querySelector('input:not([type]), input[type=""]');
       if (candidateInput) {
-        // Double-check it's not a special field
+        // Double-check it's not a special field we want to skip
         const parent = candidateInput.closest('[role="listitem"]') || candidateInput.parentElement;
-        const hasSpecialElements = parent && parent.querySelector('select, input[type="date"], input[type="time"]');
+        const hasSpecialElements =
+          parent && parent.querySelector('input[type="file"], input[type="submit"], input[type="button"], input[type="reset"]');
         if (!hasSpecialElements) {
           input = candidateInput;
         }
       }
     }
 
-    // Skip if container has special field indicators (but allow radio/checkbox now)
+    // Only skip containers with very specific keywords that indicate unsupported functionality
     if (input) {
       const containerText = container.textContent.toLowerCase();
-      const shouldSkip = CONFIG.skipKeywords.some((pattern) => containerText.includes(pattern));
+      const shouldSkip = ["captcha", "file upload", "signature pad"].some((pattern) => containerText.includes(pattern));
 
       if (shouldSkip) {
-        Logger.debug(`Skipping container with special field indicators: ${containerText.substring(0, 50)}...`);
+        Logger.debug(`Skipping container with unsupported functionality: ${containerText.substring(0, 50)}...`);
         return null;
       }
     }
@@ -730,11 +792,13 @@ class FieldFiller {
 
     Logger.debug(`Setting field value for type "${fieldType}" with role "${role}": ${value}`);
 
-    // Handle Google Forms role-based elements
+    // Handle Google Forms role-based elements first
     if (role === "radio") {
       return this.setGoogleFormsRadioValue(field, value);
     } else if (role === "checkbox") {
       return this.setGoogleFormsCheckboxValue(field, value);
+    } else if (role === "listbox" || field.classList.contains("jgvuAb")) {
+      return this.setGoogleFormsSelectValue(field, value);
     }
 
     // Handle standard HTML form elements
@@ -743,6 +807,10 @@ class FieldFiller {
         return this.setRadioValue(field, value);
       case "checkbox":
         return this.setCheckboxValue(field, value);
+      case "date":
+        return this.setDateFieldValue(field, value);
+      case "select":
+        return this.setSelectFieldValue(field, value);
       case "text":
       case "email":
       case "tel":
@@ -806,6 +874,190 @@ class FieldFiller {
         Logger.error("Fallback value assignment also failed:", e.message);
         return false;
       }
+    }
+  }
+
+  /**
+   * Set the value of a date input field
+   * @param {HTMLElement} field - The date input field
+   * @param {string} value - The date value to set (should be in YYYY-MM-DD format)
+   * @returns {boolean} Success status
+   */
+  static setDateFieldValue(field, value) {
+    if (!field || value === undefined || value === null) {
+      return false;
+    }
+
+    try {
+      // Focus the field first
+      field.focus();
+
+      // Set the date value (input[type="date"] expects YYYY-MM-DD format)
+      field.value = String(value);
+
+      // Trigger events that forms expect
+      const events = [
+        new Event("focus", { bubbles: true }),
+        new Event("input", { bubbles: true }),
+        new Event("change", { bubbles: true }),
+        new Event("blur", { bubbles: true }),
+      ];
+
+      events.forEach((event) => field.dispatchEvent(event));
+
+      Logger.info(`✅ Date field set to: ${value}`);
+      return true;
+    } catch (error) {
+      Logger.error(`Error setting date field value: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Set the value of a select field
+   * @param {HTMLElement} field - The select field
+   * @param {string} value - The value to select
+   * @returns {boolean} Success status
+   */
+  static setSelectFieldValue(field, value) {
+    if (!field || value === undefined || value === null) {
+      return false;
+    }
+
+    try {
+      const targetValue = String(value).toLowerCase().trim();
+
+      // Find matching option
+      const options = field.querySelectorAll("option");
+      let matchFound = false;
+
+      for (const option of options) {
+        const optionText = option.textContent.toLowerCase().trim();
+        const optionValue = option.value.toLowerCase().trim();
+
+        if (
+          optionText === targetValue ||
+          optionValue === targetValue ||
+          optionText.includes(targetValue) ||
+          targetValue.includes(optionText)
+        ) {
+          option.selected = true;
+          field.value = option.value;
+          matchFound = true;
+
+          // Trigger change event
+          field.dispatchEvent(new Event("change", { bubbles: true }));
+
+          Logger.info(`✅ Select option selected: "${option.textContent}"`);
+          break;
+        }
+      }
+
+      if (!matchFound) {
+        Logger.debug(`No matching option found for: "${value}"`);
+      }
+
+      return matchFound;
+    } catch (error) {
+      Logger.error(`Error setting select field value: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Set the value of a Google Forms select/dropdown field
+   * @param {HTMLElement} field - The Google Forms dropdown element
+   * @param {string} value - The value to select
+   * @returns {boolean} Success status
+   */
+  static setGoogleFormsSelectValue(field, value) {
+    if (!field || value === undefined || value === null) {
+      return false;
+    }
+
+    try {
+      const targetValue = String(value).toLowerCase().trim();
+
+      Logger.debug(`Attempting to set Google Forms dropdown to: "${value}"`);
+
+      // First, try to find options directly
+      let options = field.querySelectorAll('[role="option"]');
+
+      // If no options found, try to open the dropdown first
+      if (options.length === 0) {
+        field.focus();
+        field.click();
+
+        // Trigger some events that might help open the dropdown
+        const events = ["mousedown", "mouseup", "click"];
+        events.forEach((eventType) => {
+          field.dispatchEvent(new MouseEvent(eventType, { bubbles: true }));
+        });
+
+        // Try to find options again
+        options = field.querySelectorAll('[role="option"]');
+      }
+
+      let matchFound = false;
+
+      Logger.debug(`Found ${options.length} options in Google Forms dropdown`);
+
+      for (const option of options) {
+        const optionText = option.textContent.toLowerCase().trim();
+        const dataValue = option.getAttribute("data-value");
+        const dataValueLower = dataValue ? dataValue.toLowerCase().trim() : "";
+
+        Logger.debug(`Checking option: text="${optionText}", data-value="${dataValueLower}"`);
+
+        // Skip the placeholder "Sélectionner" option
+        if (optionText === "sélectionner" || optionText === "select") {
+          continue;
+        }
+
+        if (
+          optionText === targetValue ||
+          dataValueLower === targetValue ||
+          optionText.includes(targetValue) ||
+          targetValue.includes(optionText) ||
+          (dataValue && (dataValueLower.includes(targetValue) || targetValue.includes(dataValueLower)))
+        ) {
+          // Click the option to select it
+          option.click();
+
+          // Also trigger mouse events
+          option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+          option.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+          option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+          // Set aria-selected attribute
+          option.setAttribute("aria-selected", "true");
+
+          // Update other options to be unselected
+          options.forEach((opt) => {
+            if (opt !== option) {
+              opt.setAttribute("aria-selected", "false");
+            }
+          });
+
+          matchFound = true;
+
+          Logger.info(`✅ Google Forms dropdown option selected: "${option.textContent}"`);
+          break;
+        }
+      }
+
+      if (!matchFound) {
+        Logger.debug(`No matching option found in Google Forms dropdown for: "${value}"`);
+        Logger.debug(
+          `Available options:`,
+          Array.from(options).map((opt) => `"${opt.textContent}" (data-value: "${opt.getAttribute("data-value")}")`)
+        );
+      }
+
+      return matchFound;
+    } catch (error) {
+      Logger.error(`Error setting Google Forms select field value: ${error.message}`);
+      return false;
     }
   }
 
@@ -1438,66 +1690,130 @@ class FormAutoFiller {
 
       if (!questionLabel) return;
 
+      // Count ALL containers with valid question labels as detected fields
+      this.statistics.fieldsDetected++;
+
+      // Find ANY type of input field (text, date, select, radio, checkbox)
       const inputField = FormDetector.findInputField(container);
+
+      let matchFound = false;
+      let matchedKey = "";
+      let matchedValue = "";
+      let inputType = "unknown";
+      let fieldCategory = "unknown";
+
       if (inputField) {
-        this.statistics.fieldsDetected++;
+        inputType = inputField.type || inputField.tagName.toLowerCase() || inputField.getAttribute("role") || "element";
 
-        // Try exact match first
-        let matchFound = false;
-        let matchedKey = "";
-        let matchedValue = "";
-
-        // Check for exact match
-        if (this.dictionary[questionLabel]) {
-          Logger.info(`✅ Exact match found: "${questionLabel}" -> "${this.dictionary[questionLabel]}"`);
-          const success = FieldFiller.setFieldValue(inputField, this.dictionary[questionLabel]);
-          if (success) {
-            this.statistics.fieldsFilled++;
-            matchFound = true;
-            matchedKey = questionLabel;
-            matchedValue = this.dictionary[questionLabel];
-          }
+        // Categorize the field type for better statistics
+        if (inputType === "date") {
+          fieldCategory = "date";
+        } else if (
+          inputType === "select" ||
+          inputField.querySelector('[role="listbox"]') ||
+          container.querySelector('[role="listbox"]')
+        ) {
+          fieldCategory = "select";
+        } else if (inputType === "radio" || inputField.getAttribute("role") === "radio" || container.querySelector('[role="radio"]')) {
+          fieldCategory = "radio";
+        } else if (
+          inputType === "checkbox" ||
+          inputField.getAttribute("role") === "checkbox" ||
+          container.querySelector('[role="checkbox"]')
+        ) {
+          fieldCategory = "checkbox";
+        } else if (inputType === "text" || inputType === "email" || inputType === "tel" || inputType === "textarea") {
+          fieldCategory = "text";
         } else {
-          // Try intelligent matching
-          const bestMatch = this.fieldMatcher.findBestMatch(questionLabel);
-          if (bestMatch) {
-            Logger.info(`✅ Best match found: "${bestMatch.key}" -> "${bestMatch.value}" (score: ${bestMatch.score.toFixed(2)})`);
-            const success = FieldFiller.setFieldValue(inputField, bestMatch.value);
+          fieldCategory = "other";
+        }
+
+        // Only try to fill supported field types (NOW INCLUDING date and select)
+        if (
+          fieldCategory === "text" ||
+          fieldCategory === "radio" ||
+          fieldCategory === "checkbox" ||
+          fieldCategory === "date" ||
+          fieldCategory === "select"
+        ) {
+          // Try exact match first
+          if (this.dictionary[questionLabel]) {
+            Logger.info(`✅ Exact match found: "${questionLabel}" -> "${this.dictionary[questionLabel]}"`);
+            const success = FieldFiller.setFieldValue(inputField, this.dictionary[questionLabel]);
             if (success) {
               this.statistics.fieldsFilled++;
               matchFound = true;
-              matchedKey = bestMatch.key;
-              matchedValue = bestMatch.value;
+              matchedKey = questionLabel;
+              matchedValue = this.dictionary[questionLabel];
+            }
+          } else {
+            // Try intelligent matching
+            const bestMatch = this.fieldMatcher.findBestMatch(questionLabel);
+            if (bestMatch) {
+              Logger.info(`✅ Best match found: "${bestMatch.key}" -> "${bestMatch.value}" (score: ${bestMatch.score.toFixed(2)})`);
+              const success = FieldFiller.setFieldValue(inputField, bestMatch.value);
+              if (success) {
+                this.statistics.fieldsFilled++;
+                matchFound = true;
+                matchedKey = bestMatch.key;
+                matchedValue = bestMatch.value;
+              }
             }
           }
+        } else {
+          Logger.debug(`⏭️ Skipped question ${index + 1}: unsupported field type "${fieldCategory}" (${inputType})`);
         }
-
-        // Store detection result for debugging
-        this.statistics.detectionResults.push({
-          questionLabel,
-          matched: matchFound,
-          key: matchedKey,
-          value: matchedValue,
-          inputType: inputField.type || inputField.tagName.toLowerCase(),
-        });
       } else {
-        Logger.debug(`⏭️ Skipped question ${index + 1}: no suitable input field found`);
+        Logger.debug(`⏭️ Skipped question ${index + 1}: no input field found`);
+        inputType = "no-input-field";
+        fieldCategory = "no-input";
       }
+
+      // Store detection result for ALL questions
+      this.statistics.detectionResults.push({
+        questionLabel,
+        matched: matchFound,
+        key: matchedKey,
+        value: matchedValue,
+        inputType: inputType,
+        fieldCategory: fieldCategory,
+        hasInputField: !!inputField,
+      });
     });
 
-    const successRate =
+    // Calculate comprehensive statistics
+    const supportedFields = this.statistics.detectionResults.filter(
+      (r) =>
+        r.fieldCategory === "text" ||
+        r.fieldCategory === "radio" ||
+        r.fieldCategory === "checkbox" ||
+        r.fieldCategory === "date" ||
+        r.fieldCategory === "select"
+    ).length;
+
+    const unsupportedFields = this.statistics.detectionResults.filter((r) => r.fieldCategory === "other").length;
+
+    const fieldsWithoutInput = this.statistics.detectionResults.filter((r) => !r.hasInputField).length;
+
+    const supportedSuccessRate = supportedFields > 0 ? Math.round((this.statistics.fieldsFilled / supportedFields) * 100) : 0;
+    const overallSuccessRate =
       this.statistics.fieldsDetected > 0 ? Math.round((this.statistics.fieldsFilled / this.statistics.fieldsDetected) * 100) : 0;
 
     Logger.info(
-      `Form fill complete: ${this.statistics.fieldsFilled}/${this.statistics.fieldsDetected} fields filled (${successRate}%)`
+      `Form fill complete: ${this.statistics.fieldsFilled}/${supportedFields} champs supportés remplis, ${unsupportedFields} champs non supportés, ${fieldsWithoutInput} sans champ d'entrée (Total: ${this.statistics.fieldsDetected} questions)`
     );
     Logger.debug("Detection results:", this.statistics.detectionResults);
 
     return {
       success: true,
-      message: `Rempli ${this.statistics.fieldsFilled} champs sur ${this.statistics.fieldsDetected} détectés (${successRate}%)`,
+      message: `Analysé ${this.statistics.fieldsDetected} questions - Rempli ${this.statistics.fieldsFilled} champs (${overallSuccessRate}%)`,
       fieldsDetected: this.statistics.fieldsDetected,
       fieldsFilled: this.statistics.fieldsFilled,
+      supportedFields: supportedFields,
+      unsupportedFields: unsupportedFields,
+      fieldsWithoutInput: fieldsWithoutInput,
+      supportedSuccessRate: supportedSuccessRate,
+      overallSuccessRate: overallSuccessRate,
       detectionResults: this.statistics.detectionResults,
     };
   }
