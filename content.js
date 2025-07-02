@@ -11,6 +11,83 @@
 "use strict";
 
 // ============================================================================
+// PAGE DETECTION & CONFIGURATION ADAPTATION
+// ============================================================================
+
+/**
+ * Detect the current page type and adapt configuration accordingly
+ */
+function detectPageTypeAndAdaptConfig() {
+  const url = window.location.href;
+  const hostname = window.location.hostname;
+
+  Logger.info(`Detecting page type for: ${url}`);
+
+  // Google Forms detection
+  if (hostname.includes("docs.google.com") && url.includes("/forms/")) {
+    Logger.info("✅ Google Forms page detected - using Google Forms specific selectors");
+
+    // Adapt selectors specifically for Google Forms
+    CONFIG.containerSelectors = [
+      '[role="listitem"]', // Main Google Forms question containers
+      '[data-params*="question"]', // Google Forms question wrapper
+      ".m2", // Google Forms question class
+      ".freebirdFormviewerViewItemsItemItem", // Google Forms item wrapper
+      ".Xb9hP", // Another Google Forms class
+      ".geS5n", // Google Forms container
+      ".AgroKb", // Google Forms question container
+    ];
+
+    CONFIG.questionTextSelectors = [
+      '[role="heading"]', // Google Forms question heading
+      ".M7eMe", // Google Forms question text class
+      ".freebirdFormviewerViewItemsItemItemTitle", // Google Forms title
+      ".AgroKb .M7eMe", // Nested Google Forms question
+      'span[dir="auto"]', // Google Forms text direction span
+      'div[dir="auto"]', // Google Forms text direction div
+      ".docssharedWizToggleLabeledLabelWrapper", // Google Forms label wrapper
+    ];
+
+    return "google-forms";
+  }
+
+  // Local test page detection
+  if (hostname === "" || url.startsWith("file://") || hostname.includes("localhost")) {
+    Logger.info("✅ Local test page detected - using generic selectors");
+
+    // Adapt selectors for generic HTML forms
+    CONFIG.containerSelectors = [
+      ".question", // For our test page
+      '[role="listitem"]', // Standard Google Forms
+      '[data-params*="question"]', // Google Forms fallback
+      "fieldset", // Standard HTML forms
+      ".form-group", // Bootstrap forms
+      ".question-container", // Custom form containers
+      "div", // Generic divs (will be filtered)
+    ];
+
+    CONFIG.questionTextSelectors = [
+      "h3", // For our test page
+      "label", // Standard labels
+      ".question-title", // Custom question titles
+      '[role="heading"]', // Accessibility heading
+      ".form-label", // Bootstrap labels
+      "legend", // Fieldset legends
+    ];
+
+    return "test-page";
+  }
+
+  // Other pages - use generic selectors
+  Logger.info("📄 Generic page detected - using universal selectors");
+  CONFIG.containerSelectors = ["fieldset", ".form-group", ".question", '[role="listitem"]', "div"];
+
+  CONFIG.questionTextSelectors = ["label", "legend", "h1", "h2", "h3", "h4", "h5", "h6", ".question-title", ".form-label"];
+
+  return "generic";
+}
+
+// ============================================================================
 // CONFIGURATION & DATA MODELS
 // ============================================================================
 
@@ -79,6 +156,35 @@ const USER_PROFILE = {
   // Miscellaneous
   misc: {
     examSubjects: "Tous les sujets",
+  },
+
+  // Radio/Checkbox Options (new category)
+  choices: {
+    // Document type choices
+    idType: "CNI", // CNI, Passeport, recépissé
+
+    // Gender choices - exactement comme dans votre Google Form
+    gender: "masculin", // masculin, feminin
+    sex: "homme", // homme, femme
+
+    // Exam subjects (multiple choice) - exactement comme dans votre Google Form
+    examTypes: ["CE", "CO"], // CE, CO, EE, EO pour les codes
+    examTypesFull: ["Comprehension écrite", "comprehension orale"], // Noms complets
+
+    // Disabilities - exactement comme dans votre Google Form
+    hasDisabilities: "Aucun", // Aucun, Vision
+
+    // Agreement/Engagement checkboxes
+    agreement: true, // Cochez la case, engagement sur l'honneur
+    termsAccepted: true,
+
+    // Language preferences
+    preferredLanguage: "Français", // Français, Anglais, etc.
+
+    // Other yes/no choices
+    hasExperience: true,
+    needsAccommodation: false,
+    isFirstTime: true,
   },
 };
 
@@ -211,6 +317,42 @@ const FIELD_MAPPINGS = {
   misc: {
     examSubjects: ["sujet d'examen", "sujet examen"],
   },
+
+  // Radio/Checkbox Mappings
+  choices: {
+    // Document type radio buttons
+    idType: ["type de piece d'idententité", "type de pièce d'identité", "type de piece d'identité", "type document", "document type"],
+
+    // Gender radio buttons - exactement comme vos questions Google Forms
+    gender: ["genre"],
+    sex: ["sexe"],
+
+    // Exam types (checkboxes) - exactement comme vos questions Google Forms
+    examTypes: ["sujet d'examen", "sujet examen", "sujets d'examen", "sujets examen"],
+    examTypesFull: ["sujet d'examen", "sujet examen", "sujets d'examen", "sujets examen"],
+
+    // Disabilities - exactement comme votre question Google Forms
+    hasDisabilities: ["handicapts", "handicap", "difficultés", "difficultes", "besoins particuliers"],
+
+    // Agreement/Legal checkboxes
+    agreement: [
+      "engagement sur l'honneur",
+      "engagement sur honneur",
+      "cochez la case",
+      "j'engage ma responsabilité",
+      "je confirme",
+      "j'accepte",
+    ],
+
+    termsAccepted: [
+      "conditions d'utilisation",
+      "conditions utilisation",
+      "règles de confidentialité",
+      "regles confidentialite",
+      "accepter les conditions",
+      "accepte les termes",
+    ],
+  },
 };
 
 /**
@@ -241,14 +383,26 @@ const CONFIG = {
     'div[dir="auto"]',
   ],
 
-  // Input field selectors (only text-based inputs)
-  inputSelectors: ['input[type="text"]', 'input[type="email"]', 'input[type="tel"]', "textarea"],
+  // Input field selectors (extended to include Google Forms radios and checkboxes)
+  inputSelectors: [
+    'input[type="text"]',
+    'input[type="email"]',
+    'input[type="tel"]',
+    "textarea",
+    'input[type="radio"]',
+    'input[type="checkbox"]',
+    // Google Forms specific selectors
+    'div[role="radio"]',
+    'div[role="checkbox"]',
+    'span[role="radio"]',
+    'span[role="checkbox"]',
+  ],
 
-  // Field types to skip
-  skipFieldTypes: ["date", "time", "datetime-local", "color", "range", "file", "checkbox", "radio", "submit", "button", "reset"],
+  // Field types to skip (removed radio and checkbox)
+  skipFieldTypes: ["date", "time", "datetime-local", "color", "range", "file", "submit", "button", "reset"],
 
-  // Keywords that indicate special fields to skip
-  skipKeywords: ["date", "sélectionn", "cochez", "radio", "checkbox", "select", "choisir"],
+  // Keywords that indicate special fields to skip (removed radio/checkbox keywords)
+  skipKeywords: ["date", "sélectionn", "select", "choisir"],
 
   // Special keyword patterns for complex matching
   specialKeywords: {
@@ -325,9 +479,28 @@ class FormDetector {
     for (const selector of CONFIG.containerSelectors) {
       const elements = document.querySelectorAll(selector);
       if (elements.length > 0) {
-        containers = Array.from(elements);
-        Logger.info(`Found ${containers.length} question containers using selector: ${selector}`);
-        break;
+        // Filter containers to ensure they have both text and inputs
+        const validContainers = Array.from(elements).filter((container) => {
+          const hasInput = container.querySelector("input, textarea, select");
+          const hasText = container.textContent && container.textContent.trim().length > 10; // Minimum text length
+
+          // For generic 'div' selector, be more strict
+          if (selector === "div") {
+            const hasQuestionStructure =
+              container.querySelector("h1, h2, h3, h4, h5, h6, label, legend") ||
+              container.classList.contains("question") ||
+              container.getAttribute("role") === "listitem";
+            return hasInput && hasText && hasQuestionStructure;
+          }
+
+          return hasInput && hasText;
+        });
+
+        if (validContainers.length > 0) {
+          containers = validContainers;
+          Logger.info(`Found ${containers.length} question containers using selector: ${selector}`);
+          break;
+        }
       }
     }
 
@@ -336,8 +509,10 @@ class FormDetector {
       const allDivs = document.querySelectorAll("div");
       containers = Array.from(allDivs).filter((div) => {
         const hasInput = div.querySelector("input, textarea");
-        const hasText = div.textContent && div.textContent.trim().length > 0;
-        return hasInput && hasText && !div.querySelector("div input, div textarea")?.closest("div")?.isSameNode(div);
+        const hasText = div.textContent && div.textContent.trim().length > 10;
+        const hasQuestionIndicators =
+          div.querySelector("h1, h2, h3, h4, h5, h6, label") || div.classList.contains("question") || div.getAttribute("role");
+        return hasInput && hasText && hasQuestionIndicators;
       });
       Logger.info(`Fallback: Found ${containers.length} question containers`);
     }
@@ -385,13 +560,30 @@ class FormDetector {
   }
 
   /**
-   * Finds the input field within a question container (text inputs only)
+   * Finds the input field within a question container (text inputs, radios, checkboxes)
    * @param {Element} container - The question container element
-   * @returns {Element|null} The input or textarea element
+   * @returns {Element|null} The input element
    */
   static findInputField(container) {
-    // Look for text inputs and textareas only
+    // Look for any supported input field types
     let input = container.querySelector(CONFIG.inputSelectors.join(", "));
+
+    // Special handling for Google Forms radio/checkbox groups
+    if (!input) {
+      // Look for Google Forms radio groups
+      const radioGroup = container.querySelector('div[role="radiogroup"]');
+      if (radioGroup) {
+        const firstRadio = radioGroup.querySelector('div[role="radio"]');
+        if (firstRadio) return firstRadio;
+      }
+
+      // Look for Google Forms checkbox groups
+      const checkboxGroup = container.querySelector('div[role="group"]');
+      if (checkboxGroup) {
+        const firstCheckbox = checkboxGroup.querySelector('div[role="checkbox"]');
+        if (firstCheckbox) return firstCheckbox;
+      }
+    }
 
     // If not found, try inputs without type (which default to text)
     if (!input) {
@@ -399,16 +591,14 @@ class FormDetector {
       if (candidateInput) {
         // Double-check it's not a special field
         const parent = candidateInput.closest('[role="listitem"]') || candidateInput.parentElement;
-        const hasSpecialElements =
-          parent &&
-          parent.querySelector('select, input[type="radio"], input[type="checkbox"], input[type="date"], input[type="time"]');
+        const hasSpecialElements = parent && parent.querySelector('select, input[type="date"], input[type="time"]');
         if (!hasSpecialElements) {
           input = candidateInput;
         }
       }
     }
 
-    // Skip if container has special field indicators
+    // Skip if container has special field indicators (but allow radio/checkbox now)
     if (input) {
       const containerText = container.textContent.toLowerCase();
       const shouldSkip = CONFIG.skipKeywords.some((pattern) => containerText.includes(pattern));
@@ -524,15 +714,54 @@ class FieldMatcher {
  */
 class FieldFiller {
   /**
-   * Sets the value of an input field and triggers necessary events
-   * @param {Element} field - The input/textarea element
-   * @param {string} value - The value to set
+   * Set the value of a form field based on its type
+   * @param {HTMLElement} field - The input field to fill
+   * @param {string|boolean|Array} value - The value to set
    * @returns {boolean} Success status
    */
   static setFieldValue(field, value) {
-    if (!field || !value) return false;
+    if (!field || value === undefined || value === null) {
+      return false;
+    }
 
-    Logger.debug(`Setting field value: "${value}" for field:`, field);
+    // Check if this is a Google Forms role-based element
+    const role = field.getAttribute("role");
+    const fieldType = field.type ? field.type.toLowerCase() : field.tagName.toLowerCase();
+
+    Logger.debug(`Setting field value for type "${fieldType}" with role "${role}": ${value}`);
+
+    // Handle Google Forms role-based elements
+    if (role === "radio") {
+      return this.setGoogleFormsRadioValue(field, value);
+    } else if (role === "checkbox") {
+      return this.setGoogleFormsCheckboxValue(field, value);
+    }
+
+    // Handle standard HTML form elements
+    switch (fieldType) {
+      case "radio":
+        return this.setRadioValue(field, value);
+      case "checkbox":
+        return this.setCheckboxValue(field, value);
+      case "text":
+      case "email":
+      case "tel":
+      case "textarea":
+      default:
+        return this.setTextFieldValue(field, value);
+    }
+  }
+
+  /**
+   * Set the value of a text-based input field
+   * @param {HTMLElement} field - The input field to fill
+   * @param {string} value - The value to set
+   * @returns {boolean} Success status
+   */
+  static setTextFieldValue(field, value) {
+    if (!field || value === undefined || value === null) {
+      return false;
+    }
 
     try {
       // Focus the field first
@@ -542,7 +771,7 @@ class FieldFiller {
       field.value = "";
 
       // Set the new value
-      field.value = value;
+      field.value = String(value);
 
       // Trigger events that Google Forms expects
       const events = [
@@ -558,7 +787,7 @@ class FieldFiller {
       try {
         const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
         if (nativeInputValueSetter) {
-          nativeInputValueSetter.call(field, value);
+          nativeInputValueSetter.call(field, String(value));
           const reactInputEvent = new Event("input", { bubbles: true });
           field.dispatchEvent(reactInputEvent);
         }
@@ -568,16 +797,608 @@ class FieldFiller {
 
       return true;
     } catch (error) {
-      Logger.error(`Error setting field value: ${error.message}`);
+      Logger.error(`Error setting text field value: ${error.message}`);
       // Fallback: simple value assignment
       try {
-        field.value = value;
+        field.value = String(value);
         return true;
       } catch (e) {
         Logger.error("Fallback value assignment also failed:", e.message);
         return false;
       }
     }
+  }
+
+  /**
+   * Set the value of a radio button
+   * @param {HTMLElement} radioField - The radio button field
+   * @param {string} value - The value to match
+   * @returns {boolean} Success status
+   */
+  static setRadioValue(radioField, value) {
+    try {
+      const container = radioField.closest('[role="listitem"]') || radioField.closest('[data-params*="question"]');
+      if (!container) {
+        Logger.debug("Could not find radio button container");
+        return false;
+      }
+
+      // Find all radio buttons in the same group (same name attribute)
+      const radioGroup = container.querySelectorAll(`input[type="radio"][name="${radioField.name}"]`);
+
+      if (radioGroup.length === 0) {
+        Logger.debug("No radio group found");
+        return false;
+      }
+
+      Logger.debug(`Found ${radioGroup.length} radio buttons in group`);
+
+      // Convert value to lowercase for comparison
+      const targetValue = String(value).toLowerCase().trim();
+
+      // Try to find a matching radio button
+      for (const radio of radioGroup) {
+        // Get the label text for this radio button
+        const label = this.getRadioLabel(radio);
+        if (!label) continue;
+
+        const labelValue = label.toLowerCase().trim();
+        Logger.debug(`Comparing "${targetValue}" with radio label "${labelValue}"`);
+
+        // Check for exact match or partial match
+        if (
+          labelValue === targetValue ||
+          labelValue.includes(targetValue) ||
+          targetValue.includes(labelValue) ||
+          this.isRadioValueMatch(targetValue, labelValue)
+        ) {
+          Logger.info(`✅ Selecting radio button: "${label}"`);
+
+          // Select the radio button
+          radio.checked = true;
+          radio.focus();
+
+          // Dispatch events
+          const events = [
+            new Event("change", { bubbles: true }),
+            new Event("click", { bubbles: true }),
+            new Event("input", { bubbles: true }),
+          ];
+
+          events.forEach((event) => radio.dispatchEvent(event));
+
+          return true;
+        }
+      }
+
+      Logger.debug(`No matching radio button found for value: "${targetValue}"`);
+      return false;
+    } catch (error) {
+      Logger.error(`Error setting radio value: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Set the value of a Google Forms radio button (role="radio")
+   * @param {HTMLElement} radioField - The div with role="radio"
+   * @param {string} value - The value to match
+   * @returns {boolean} Success status
+   */
+  static setGoogleFormsRadioValue(radioField, value) {
+    try {
+      // Find the radio group container
+      const radioGroup = radioField.closest('[role="radiogroup"]') || radioField.parentElement;
+      if (!radioGroup) {
+        Logger.debug("Could not find Google Forms radio group");
+        return false;
+      }
+
+      // Find all radio options in the group
+      const radioOptions = radioGroup.querySelectorAll('[role="radio"]');
+      if (radioOptions.length === 0) {
+        Logger.debug("No radio options found in Google Forms radio group");
+        return false;
+      }
+
+      Logger.debug(`Found ${radioOptions.length} Google Forms radio options`);
+
+      const targetValue = String(value).toLowerCase().trim();
+
+      // Try to find a matching radio option
+      for (const radio of radioOptions) {
+        const label = this.getGoogleFormsLabel(radio);
+        const dataValue = radio.getAttribute("data-value");
+
+        if (!label && !dataValue) continue;
+
+        const labelValue = label ? label.toLowerCase().trim() : "";
+        const dataValueLower = dataValue ? dataValue.toLowerCase().trim() : "";
+
+        Logger.debug(`Comparing "${targetValue}" with Google Forms radio: label="${labelValue}", data-value="${dataValueLower}"`);
+
+        // Check for exact match or partial match
+        if (
+          labelValue === targetValue ||
+          dataValueLower === targetValue ||
+          labelValue.includes(targetValue) ||
+          dataValueLower.includes(targetValue) ||
+          targetValue.includes(labelValue) ||
+          this.isRadioValueMatch(targetValue, labelValue) ||
+          this.isRadioValueMatch(targetValue, dataValueLower)
+        ) {
+          Logger.info(`✅ Selecting Google Forms radio: "${label || dataValue}"`);
+
+          // Select the radio option
+          radio.setAttribute("aria-checked", "true");
+          radio.click();
+
+          // Find and trigger the actual hidden input if it exists
+          const hiddenInput = radioGroup.querySelector('input[type="radio"]');
+          if (hiddenInput) {
+            hiddenInput.checked = true;
+            hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+
+          return true;
+        }
+      }
+
+      Logger.debug(`No matching Google Forms radio found for value: "${targetValue}"`);
+      return false;
+    } catch (error) {
+      Logger.error(`Error setting Google Forms radio value: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Set the value of a Google Forms checkbox (role="checkbox")
+   * @param {HTMLElement} checkboxField - The div with role="checkbox"
+   * @param {boolean|string|Array} value - The value to set
+   * @returns {boolean} Success status
+   */
+  static setGoogleFormsCheckboxValue(checkboxField, value) {
+    try {
+      // Handle array values (multiple checkboxes)
+      if (Array.isArray(value)) {
+        return this.setGoogleFormsMultipleCheckboxValues(checkboxField, value);
+      }
+
+      // Handle single checkbox value
+      let shouldCheck = false;
+
+      if (typeof value === "boolean") {
+        shouldCheck = value;
+      } else if (typeof value === "string") {
+        const lowerValue = value.toLowerCase().trim();
+        shouldCheck =
+          lowerValue === "true" ||
+          lowerValue === "oui" ||
+          lowerValue === "yes" ||
+          lowerValue === "1" ||
+          lowerValue === "coché" ||
+          lowerValue === "checked";
+      }
+
+      Logger.debug(`Setting Google Forms checkbox to: ${shouldCheck}`);
+
+      // Set checkbox state
+      checkboxField.setAttribute("aria-checked", shouldCheck.toString());
+      checkboxField.click();
+
+      // Find and trigger the actual hidden input if it exists
+      const container = checkboxField.closest('[role="group"]') || checkboxField.parentElement;
+      const hiddenInput = container?.querySelector('input[type="checkbox"]');
+      if (hiddenInput) {
+        hiddenInput.checked = shouldCheck;
+        hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      Logger.info(`✅ Google Forms checkbox set to: ${shouldCheck}`);
+      return true;
+    } catch (error) {
+      Logger.error(`Error setting Google Forms checkbox value: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Set multiple Google Forms checkbox values based on an array
+   * @param {HTMLElement} checkboxField - A checkbox element in the group
+   * @param {Array} values - Array of values to check
+   * @returns {boolean} Success status
+   */
+  static setGoogleFormsMultipleCheckboxValues(checkboxField, values) {
+    if (!Array.isArray(values)) {
+      return false;
+    }
+
+    try {
+      // Find the checkbox group container
+      const checkboxGroup = checkboxField.closest('[role="group"]') || checkboxField.parentElement;
+      if (!checkboxGroup) {
+        Logger.debug("Could not find Google Forms checkbox group");
+        return false;
+      }
+
+      const checkboxes = checkboxGroup.querySelectorAll('[role="checkbox"]');
+      let successCount = 0;
+
+      // Get all available options to determine format
+      const availableOptions = Array.from(checkboxes)
+        .map((checkbox) => {
+          const label = this.getGoogleFormsLabel(checkbox);
+          return label ? label.toLowerCase().trim() : "";
+        })
+        .filter((label) => label);
+
+      Logger.debug(`Available Google Forms checkbox options:`, availableOptions);
+
+      // Determine format and choose appropriate values
+      const isCodesFormat = availableOptions.some((option) => ["ce", "co", "ee", "eo"].includes(option));
+      const isFullNamesFormat = availableOptions.some((option) => option.includes("comprehension") || option.includes("expression"));
+
+      Logger.debug(`Google Forms format - Codes: ${isCodesFormat}, Full names: ${isFullNamesFormat}`);
+
+      let valuesToUse = [];
+      if (isCodesFormat) {
+        valuesToUse = USER_PROFILE.choices.examTypes; // ["CE", "CO"]
+      } else if (isFullNamesFormat) {
+        valuesToUse = USER_PROFILE.choices.examTypesFull; // ["Comprehension écrite", "comprehension orale"]
+      } else {
+        valuesToUse = values;
+      }
+
+      Logger.debug(`Using values for Google Forms matching:`, valuesToUse);
+
+      valuesToUse.forEach((value) => {
+        const targetValue = String(value).toLowerCase().trim();
+
+        for (const checkbox of checkboxes) {
+          const label = this.getGoogleFormsLabel(checkbox);
+          const dataValue = checkbox.getAttribute("data-value");
+
+          if (!label && !dataValue) continue;
+
+          const labelValue = label ? label.toLowerCase().trim() : "";
+          const dataValueLower = dataValue ? dataValue.toLowerCase().trim() : "";
+
+          // Enhanced matching logic
+          if (this.isCheckboxValueMatch(targetValue, labelValue) || this.isCheckboxValueMatch(targetValue, dataValueLower)) {
+            checkbox.setAttribute("aria-checked", "true");
+            checkbox.click();
+
+            // Find and trigger hidden input
+            const hiddenInput =
+              checkbox.querySelector('input[type="checkbox"]') || checkbox.parentElement.querySelector('input[type="checkbox"]');
+            if (hiddenInput) {
+              hiddenInput.checked = true;
+              hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+            }
+
+            successCount++;
+            Logger.info(`✅ Checked Google Forms checkbox: "${label || dataValue}"`);
+            break;
+          }
+        }
+      });
+
+      return successCount > 0;
+    } catch (error) {
+      Logger.error(`Error setting Google Forms multiple checkbox values: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Get the label text for a Google Forms element (role="radio" or role="checkbox")
+   * @param {HTMLElement} element - The element with role="radio" or role="checkbox"
+   * @returns {string|null} The label text or null
+   */
+  static getGoogleFormsLabel(element) {
+    try {
+      // Method 1: Check for span with dir="auto" (most common in Google Forms)
+      let span = element.querySelector('span[dir="auto"]');
+      if (span && span.textContent.trim()) {
+        return span.textContent.trim();
+      }
+
+      // Method 2: Check for aria-label
+      if (element.getAttribute("aria-label")) {
+        return element.getAttribute("aria-label");
+      }
+
+      // Method 3: Check for data-value
+      if (element.getAttribute("data-value")) {
+        return element.getAttribute("data-value");
+      }
+
+      // Method 4: Get text content directly
+      const text = element.textContent.trim();
+      if (text) return text;
+
+      // Method 5: Check parent element
+      const parent = element.parentElement;
+      if (parent) {
+        const parentSpan = parent.querySelector('span[dir="auto"]');
+        if (parentSpan && parentSpan.textContent.trim()) {
+          return parentSpan.textContent.trim();
+        }
+      }
+
+      return null;
+    } catch (error) {
+      Logger.debug(`Error getting Google Forms label: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Set the value of a checkbox
+   * @param {HTMLElement} checkboxField - The checkbox field
+   * @param {boolean|string|Array} value - The value to set (true/false, "true"/"false", or array for multiple)
+   * @returns {boolean} Success status
+   */
+  static setCheckboxValue(checkboxField, value) {
+    try {
+      const container = checkboxField.closest('[role="listitem"]') || checkboxField.closest('[data-params*="question"]');
+
+      // Handle array values (multiple checkboxes)
+      if (Array.isArray(value)) {
+        return this.setMultipleCheckboxValues(container, value);
+      }
+
+      // Handle single checkbox value
+      let shouldCheck = false;
+
+      if (typeof value === "boolean") {
+        shouldCheck = value;
+      } else if (typeof value === "string") {
+        const lowerValue = value.toLowerCase().trim();
+        // Handle various representations of true/false
+        shouldCheck =
+          lowerValue === "true" ||
+          lowerValue === "oui" ||
+          lowerValue === "yes" ||
+          lowerValue === "1" ||
+          lowerValue === "coché" ||
+          lowerValue === "checked";
+      }
+
+      Logger.debug(`Setting checkbox to: ${shouldCheck}`);
+
+      // Set checkbox state
+      checkboxField.checked = shouldCheck;
+      checkboxField.focus();
+
+      // Dispatch events
+      const events = [
+        new Event("change", { bubbles: true }),
+        new Event("click", { bubbles: true }),
+        new Event("input", { bubbles: true }),
+      ];
+
+      events.forEach((event) => checkboxField.dispatchEvent(event));
+
+      Logger.info(`✅ Checkbox set to: ${shouldCheck}`);
+      return true;
+    } catch (error) {
+      Logger.error(`Error setting checkbox value: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Set multiple checkbox values based on an array
+   * @param {HTMLElement} container - The question container
+   * @param {Array} values - Array of values to check
+   * @returns {boolean} Success status
+   */
+  static setMultipleCheckboxValues(container, values) {
+    if (!container || !Array.isArray(values)) {
+      return false;
+    }
+
+    try {
+      const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+      let successCount = 0;
+
+      // Get all available options in this container to determine the format
+      const availableOptions = Array.from(checkboxes)
+        .map((checkbox) => {
+          const label = this.getCheckboxLabel(checkbox);
+          return label ? label.toLowerCase().trim() : "";
+        })
+        .filter((label) => label);
+
+      Logger.debug(`Available checkbox options:`, availableOptions);
+
+      // Determine if this is a "codes" question (CE, CO, EE, EO) or "full names" question
+      const isCodesFormat = availableOptions.some((option) => ["ce", "co", "ee", "eo"].includes(option));
+
+      const isFullNamesFormat = availableOptions.some((option) => option.includes("comprehension") || option.includes("expression"));
+
+      Logger.debug(`Question format - Codes: ${isCodesFormat}, Full names: ${isFullNamesFormat}`);
+
+      // Choose the appropriate value set
+      let valuesToUse = [];
+      if (isCodesFormat) {
+        // Use the short codes: CE, CO
+        valuesToUse = USER_PROFILE.choices.examTypes; // ["CE", "CO"]
+      } else if (isFullNamesFormat) {
+        // Use the full names: Comprehension écrite, comprehension orale
+        valuesToUse = USER_PROFILE.choices.examTypesFull; // ["Comprehension écrite", "comprehension orale"]
+      } else {
+        // Fallback to the original values
+        valuesToUse = values;
+      }
+
+      Logger.debug(`Using values for matching:`, valuesToUse);
+
+      valuesToUse.forEach((value) => {
+        const targetValue = String(value).toLowerCase().trim();
+
+        for (const checkbox of checkboxes) {
+          const label = this.getCheckboxLabel(checkbox);
+          if (!label) continue;
+
+          const labelValue = label.toLowerCase().trim();
+
+          // Enhanced matching logic
+          if (this.isCheckboxValueMatch(targetValue, labelValue)) {
+            checkbox.checked = true;
+            checkbox.focus();
+
+            const events = [
+              new Event("change", { bubbles: true }),
+              new Event("click", { bubbles: true }),
+              new Event("input", { bubbles: true }),
+            ];
+
+            events.forEach((event) => checkbox.dispatchEvent(event));
+            successCount++;
+            Logger.info(`✅ Checked checkbox: "${label}"`);
+            break;
+          }
+        }
+      });
+
+      return successCount > 0;
+    } catch (error) {
+      Logger.error(`Error setting multiple checkbox values: ${error.message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Get the label text for a radio button
+   * @param {HTMLElement} radio - The radio button element
+   * @returns {string|null} The label text or null
+   */
+  static getRadioLabel(radio) {
+    try {
+      // Method 1: Check for sibling label or span
+      let label = radio.nextElementSibling;
+      if (label && (label.tagName === "LABEL" || label.tagName === "SPAN")) {
+        return label.textContent.trim();
+      }
+
+      // Method 2: Check parent for text content
+      const parent = radio.parentElement;
+      if (parent) {
+        // Clone parent and remove the radio input to get just the text
+        const clone = parent.cloneNode(true);
+        const radioClone = clone.querySelector('input[type="radio"]');
+        if (radioClone) radioClone.remove();
+        const text = clone.textContent.trim();
+        if (text) return text;
+      }
+
+      // Method 3: Look for aria-label
+      if (radio.getAttribute("aria-label")) {
+        return radio.getAttribute("aria-label");
+      }
+
+      // Method 4: Look for associated label by ID
+      if (radio.id) {
+        const labelElement = document.querySelector(`label[for="${radio.id}"]`);
+        if (labelElement) return labelElement.textContent.trim();
+      }
+
+      return null;
+    } catch (error) {
+      Logger.debug(`Error getting radio label: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Get the label text for a checkbox
+   * @param {HTMLElement} checkbox - The checkbox element
+   * @returns {string|null} The label text or null
+   */
+  static getCheckboxLabel(checkbox) {
+    // Use the same logic as radio buttons
+    return this.getRadioLabel(checkbox);
+  }
+
+  /**
+   * Check if a radio value matches using smart comparison
+   * @param {string} targetValue - The value we're looking for
+   * @param {string} labelValue - The label value to compare against
+   * @returns {boolean} Whether they match
+   */
+  static isRadioValueMatch(targetValue, labelValue) {
+    // Define common equivalences
+    const equivalences = {
+      masculin: ["homme", "male", "masculin", "m"],
+      feminin: ["femme", "female", "feminin", "féminin", "f"],
+      homme: ["masculin", "male", "homme", "m"],
+      femme: ["feminin", "female", "femme", "féminin", "f"],
+      cni: ["carte nationale", "carte identité", "cni", "carte d'identité"],
+      passeport: ["passeport", "passport"],
+      français: ["français", "francais", "french", "france"],
+      anglais: ["anglais", "english", "english language"],
+      // Add disability equivalences for radio buttons
+      aucun: ["aucun", "aucune", "non", "pas de handicap", "sans handicap"],
+      vision: ["vision", "visuel", "vue", "malvoyant", "aveugle"],
+    };
+
+    // Check direct equivalences
+    for (const [key, values] of Object.entries(equivalences)) {
+      if (values.includes(targetValue) && values.includes(labelValue)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if a checkbox value matches using smart comparison
+   * @param {string} targetValue - The value we're looking for
+   * @param {string} labelValue - The label value to compare against
+   * @returns {boolean} Whether they match
+   */
+  static isCheckboxValueMatch(targetValue, labelValue) {
+    // First try basic matching
+    if (labelValue === targetValue || labelValue.includes(targetValue) || targetValue.includes(labelValue)) {
+      return true;
+    }
+
+    // Define exam subject equivalences
+    const examEquivalences = {
+      ce: ["ce", "comprehension écrite", "comprehension ecrite", "compréhension écrite", "compréhension ecrite"],
+      co: ["co", "comprehension orale", "compréhension orale"],
+      ee: ["ee", "expression écrite", "expression ecrite"],
+      eo: ["eo", "expression orale"],
+      "comprehension écrite": ["ce", "comprehension écrite", "comprehension ecrite", "compréhension écrite", "compréhension ecrite"],
+      "comprehension orale": ["co", "comprehension orale", "compréhension orale"],
+      "expression écrite": ["ee", "expression écrite", "expression ecrite"],
+      "expression orale": ["eo", "expression orale"],
+    };
+
+    // Check exam subject equivalences
+    for (const [key, values] of Object.entries(examEquivalences)) {
+      if (values.includes(targetValue) && values.includes(labelValue)) {
+        return true;
+      }
+    }
+
+    // Check for disability matches
+    const disabilityEquivalences = {
+      aucun: ["aucun", "aucune", "non", "pas de handicap", "sans handicap"],
+      vision: ["vision", "visuel", "vue", "malvoyant", "aveugle"],
+    };
+
+    for (const [key, values] of Object.entries(disabilityEquivalences)) {
+      if (values.includes(targetValue) && values.includes(labelValue)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }
 
@@ -713,10 +1534,13 @@ class FormAutoFiller {
 // INITIALIZATION & EVENT HANDLING
 // ============================================================================
 
+// Detect page type and adapt configuration
+const pageType = detectPageTypeAndAdaptConfig();
+
 // Initialize the form auto-filler
 const autoFiller = new FormAutoFiller();
 
-Logger.info("Auto-Fill Google Forms content script loaded");
+Logger.info(`Auto-Fill extension loaded for ${pageType}`);
 Logger.debug("Available field mappings:", autoFiller.getFieldMappings());
 Logger.debug("Generated dictionary keys:", Object.keys(autoFiller.dictionary).length);
 
@@ -794,30 +1618,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  */
 function initializeWhenReady() {
   if (document.readyState === "complete") {
-    Logger.info("Google Forms page is ready");
+    Logger.info(`Page is ready (${pageType})`);
   } else {
     window.addEventListener("load", () => {
-      Logger.info("Google Forms page loaded");
+      Logger.info(`Page loaded (${pageType})`);
     });
   }
 }
 
 // Initialize
 initializeWhenReady();
-
-// ============================================================================
-// EXPORT FOR TESTING (if needed)
-// ============================================================================
-
-// Make classes available for testing in development
-if (typeof window !== "undefined" && window.location.hostname.includes("localhost")) {
-  window.AutoFillClasses = {
-    FormDetector,
-    FieldMatcher,
-    FieldFiller,
-    FormAutoFiller,
-    CONFIG,
-    USER_PROFILE,
-    FIELD_MAPPINGS,
-  };
-}
