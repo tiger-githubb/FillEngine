@@ -48,69 +48,19 @@ function detectPageTypeAndAdaptConfig() {
   return "generic";
 }
 
-const USER_PROFILE = {
-  personal: {
-    lastName: "KONE",
-    firstName: "Amadou",
-    fullName: "Amadou KONE",
-    gender: "Masculin",
-    sex: "Homme",
-  },
-  contact: {
-    email: "amadou.kone@example.com",
-    phone: "+225 07 08 09 10 11",
-    mobile: "+225 07 08 09 10 11",
-  },
-  location: {
-    birthPlace: "Abidjan",
-    birthCountry: "Côte d'Ivoire",
-    residence: "Yamoussoukro",
-    residenceCountry: "Côte d'Ivoire",
-    nationality: "Ivoirienne",
-    address: "Cocody, Abidjan, Côte d'Ivoire",
-  },
-  documents: {
-    idNumber: "CI1234567890",
-    passportNumber: "CI1234567890",
-    cniNumber: "CI1234567890",
-  },
-  family: {
-    fatherName: "Sekou KONE",
-    motherName: "Fatoumata TRAORE",
-  },
-  languages: {
-    usual: "Français",
-    mother: "Baoulé",
-  },
-  professional: {
-    profession: "Ingénieur informatique",
-    company: "Orange Côte d'Ivoire",
-    academicReason: "Académique - Poursuite d'études supérieures en France",
-  },
-  medical: {
-    disabilities: "Aucun",
-  },
-  dates: {
-    birthDate: "1990-01-15",
-    idExpirationDate: "2030-12-31",
-  },
-  misc: {
-    examSubjects: "Tous les sujets",
-  },
-  choices: {
-    idType: "CNI",
-    gender: "masculin",
-    sex: "homme",
-    examTypes: ["CE", "CO"],
-    examTypesFull: ["Comprehension écrite", "comprehension orale"],
-    hasDisabilities: "Aucun",
-    agreement: true,
-    termsAccepted: true,
-    preferredLanguage: "Français",
-    hasExperience: true,
-    needsAccommodation: false,
-    isFirstTime: true,
-  },
+// USER_PROFILE will be initialized from CSV data
+let USER_PROFILE = {
+  personal: {},
+  contact: {},
+  location: {},
+  documents: {},
+  family: {},
+  languages: {},
+  professional: {},
+  medical: {},
+  dates: {},
+  misc: {},
+  choices: {},
 };
 
 const FIELD_MAPPINGS = {
@@ -306,10 +256,28 @@ const CONFIG = {
 };
 
 function generateFlatDictionary() {
+  console.log("📖 GENERATING FLAT DICTIONARY");
+  console.log("├── USER_PROFILE.personal:", USER_PROFILE.personal);
+  console.log("├── USER_PROFILE keys:", Object.keys(USER_PROFILE));
+  console.log("└── Full USER_PROFILE:", USER_PROFILE);
+
   const flatDict = {};
+
+  // Only generate dictionary if USER_PROFILE has data
+  if (!USER_PROFILE.personal || Object.keys(USER_PROFILE.personal).length === 0) {
+    console.log("❌ USER_PROFILE.personal is empty or undefined");
+    console.log("├── USER_PROFILE.personal:", USER_PROFILE.personal);
+    console.log("├── Object.keys length:", USER_PROFILE.personal ? Object.keys(USER_PROFILE.personal).length : 0);
+    Logger.warn("USER_PROFILE is empty. Please upload CSV data first.");
+    return flatDict;
+  }
+
+  console.log("✅ USER_PROFILE has data, proceeding with dictionary generation");
+
   FIELD_MAPPINGS.signature.forEach((key) => {
-    flatDict[key] = USER_PROFILE.personal.fullName;
+    flatDict[key] = USER_PROFILE.personal.fullName || "";
   });
+
   Object.entries(FIELD_MAPPINGS).forEach(([category, fields]) => {
     if (category === "signature") return;
     Object.entries(fields).forEach(([fieldType, variations]) => {
@@ -321,13 +289,18 @@ function generateFlatDictionary() {
       } else if (USER_PROFILE[category] && USER_PROFILE[category][fieldType]) {
         value = USER_PROFILE[category][fieldType];
       } else {
-        value = undefined;
+        value = "";
       }
       variations.forEach((variation) => {
         flatDict[variation] = value;
       });
     });
   });
+
+  console.log("📖 GENERATED FLAT DICTIONARY:", flatDict);
+  console.log("├── Dictionary keys count:", Object.keys(flatDict).length);
+  console.log("├── Sample entries:", Object.entries(flatDict).slice(0, 5));
+
   return flatDict;
 }
 
@@ -1705,11 +1678,78 @@ class FormAutoFiller {
   }
 
   /**
+   * Update user profile data and regenerate dictionary
+   * @param {Object} newProfile - New profile data from CSV
+   */
+  updateUserProfile(newProfile) {
+    console.log("🔄 UPDATE USER PROFILE CALLED");
+    console.log("├── New profile provided:", !!newProfile);
+    console.log("├── Current USER_PROFILE before update:", USER_PROFILE);
+    console.log("└── New profile data:", newProfile);
+
+    if (newProfile) {
+      // Deep merge new profile data into USER_PROFILE
+      Object.keys(newProfile).forEach((category) => {
+        console.log(`Processing category: ${category}`, newProfile[category]);
+        if (typeof newProfile[category] === "object" && newProfile[category] !== null) {
+          if (!USER_PROFILE[category]) {
+            USER_PROFILE[category] = {};
+          }
+          Object.assign(USER_PROFILE[category], newProfile[category]);
+          console.log(`✅ Updated USER_PROFILE.${category}:`, USER_PROFILE[category]);
+        }
+      });
+
+      console.log("📊 FINAL USER_PROFILE AFTER MERGE:", USER_PROFILE);
+      console.log("🔄 Regenerating dictionary...");
+
+      this.dictionary = generateFlatDictionary();
+
+      console.log("📖 GENERATED DICTIONARY:", this.dictionary);
+
+      this.fieldMatcher = new FieldMatcher(this.dictionary);
+
+      Logger.info("User profile updated from CSV data");
+      Logger.debug("Updated USER_PROFILE:", USER_PROFILE);
+
+      console.log("✅ USER PROFILE UPDATE COMPLETE");
+    } else {
+      console.log("❌ No new profile provided to updateUserProfile");
+    }
+  }
+
+  /**
    * Main function to fill the form with dictionary data
    * @returns {Object} Results with success status, message, and statistics
    */
   fillForm() {
+    console.log("🚀 FILL FORM PROCESS STARTED");
+    console.log("├── USER_PROFILE.personal:", USER_PROFILE.personal);
+    console.log("├── USER_PROFILE keys:", Object.keys(USER_PROFILE));
+    console.log("└── Dictionary available:", !!this.dictionary);
+
     Logger.info("Starting form fill process...");
+
+    // Check if user profile has been loaded
+    if (!USER_PROFILE.personal || Object.keys(USER_PROFILE.personal).length === 0) {
+      console.log("❌ NO USER DATA - form fill aborted");
+      console.log("├── USER_PROFILE.personal:", USER_PROFILE.personal);
+      console.log("├── Keys length:", USER_PROFILE.personal ? Object.keys(USER_PROFILE.personal).length : 0);
+
+      Logger.error("No user data loaded. Please upload a CSV file first.");
+      return {
+        success: false,
+        message: "Aucune donnée utilisateur chargée. Veuillez d'abord télécharger un fichier CSV.",
+        fieldsDetected: 0,
+        fieldsFilled: 0,
+        supportedFields: 0,
+        unsupportedFields: 0,
+        fieldsWithoutInput: 0,
+        supportedSuccessRate: 0,
+        overallSuccessRate: 0,
+        detectionResults: [],
+      };
+    }
 
     // Reset statistics
     this.statistics = {
@@ -1863,17 +1903,6 @@ class FormAutoFiller {
   }
 
   /**
-   * Update user profile data (for future extensibility)
-   * @param {Object} newProfile - New profile data
-   */
-  updateUserProfile(newProfile) {
-    Object.assign(USER_PROFILE, newProfile);
-    this.dictionary = generateFlatDictionary();
-    this.fieldMatcher = new FieldMatcher(this.dictionary);
-    Logger.info("User profile updated");
-  }
-
-  /**
    * Get available field mappings (for UI or debugging)
    * @returns {Object} Current field mappings structure
    */
@@ -1894,7 +1923,7 @@ const autoFiller = new FormAutoFiller();
 
 Logger.info(`Auto-Fill extension loaded for ${pageType}`);
 Logger.debug("Available field mappings:", autoFiller.getFieldMappings());
-Logger.debug("Generated dictionary keys:", Object.keys(autoFiller.dictionary).length);
+Logger.info("Extension ready. Upload CSV data to begin form filling.");
 
 // ============================================================================
 // DOM OBSERVATION & EVENT HANDLING
@@ -1935,13 +1964,43 @@ observer.observe(document.body, {
  * Message handler for communication with popup
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  Logger.debug("Content script received message:", message);
+  console.log("📥 CONTENT SCRIPT RECEIVED MESSAGE:", message);
+  console.log("├── Action:", message.action);
+  console.log("├── Has userData:", !!message.userData);
+  console.log("└── Message sender:", sender);
 
   if (message.action === "fillForm") {
     try {
+      // Log if userData is provided
+      if (message.userData) {
+        console.log("✅ CSV DATA RECEIVED IN CONTENT SCRIPT");
+        console.log("├── Data structure keys:", Object.keys(message.userData));
+        console.log("├── Personal data:", message.userData.personal);
+        console.log("├── Contact data:", message.userData.contact);
+        console.log("└── Full userData:", message.userData);
+
+        Logger.info("CSV data received in content script");
+        Logger.debug("CSV data structure:", Object.keys(message.userData));
+
+        console.log("🔄 CALLING updateUserProfile...");
+        autoFiller.updateUserProfile(message.userData);
+
+        console.log("🔍 USER_PROFILE AFTER UPDATE:");
+        console.log("├── Personal:", USER_PROFILE.personal);
+        console.log("├── Contact:", USER_PROFILE.contact);
+        console.log("└── Full USER_PROFILE:", USER_PROFILE);
+      } else {
+        console.log("❌ NO userData PROVIDED IN MESSAGE");
+        Logger.warn("No userData provided in message");
+      }
+
+      console.log("🚀 CALLING fillForm...");
       const result = autoFiller.fillForm();
+      console.log("📊 FORM FILL RESULT:", result);
+      Logger.info("Form fill result:", result);
       sendResponse(result);
     } catch (error) {
+      console.error("❌ ERROR IN MESSAGE HANDLER:", error);
       Logger.error("Error filling form:", error);
       sendResponse({
         success: false,

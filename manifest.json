@@ -1,12 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "Auto-Fill Google Forms",
+  "name": "FillEngine",
   "version": "1.0.0",
-  "description": "Automatically fill Google Forms with predefined data",
+  "description": "Extension intelligente pour remplir automatiquement les formulaires Google avec vos données CSV personnalisées",
+  "author": "tigerdev",
+  "short_name": "FillEngine",
+  "homepage_url": "https://github.com/tiger-githubb/FillEngine",
 
   "permissions": ["activeTab"],
 
-  "host_permissions": ["https://docs.google.com/forms/*", "file://*/*", "http://localhost/*", "https://localhost/*"],
+  "host_permissions": ["https://docs.google.com/forms/*"],
 
   "background": {
     "service_worker": "background.js"
@@ -14,7 +17,7 @@
 
   "content_scripts": [
     {
-      "matches": ["https://docs.google.com/forms/*", "file://*/*", "http://localhost/*", "https://localhost/*"],
+      "matches": ["https://docs.google.com/forms/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
@@ -22,7 +25,7 @@
 
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Auto-Fill Google Forms",
+    "default_title": "FillEngine",
     "default_icon": {
       "16": "public/icons/icon16.png",
       "48": "public/icons/icon48.png",

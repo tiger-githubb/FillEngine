@@ -1,268 +1,199 @@
-# Auto-Fill Google Forms Chrome Extension
+# 🚀 Auto-Fill Forms Extension
 
-🚀 **Professional Chrome Extension for Automatic Google Forms Filling**
+Extension Chrome moderne pour le remplissage automatique intelligent de formulaires web, en particulier Google Forms. Maintenant avec support de données CSV personnalisées !
 
-A powerful, intelligent Chrome Extension that automatically fills Google Forms with predefined data using Manifest V3. Built with a scalable, modular architecture for professional use.
+## ✨ Fonctionnalités
 
-## ✨ Features
+- 🎯 **Remplissage intelligent** : Détection automatique des champs de formulaire
+- � **Support Google Forms** : Optimisé pour les formulaires Google
+- � **Données CSV** : Chargez vos propres données depuis un fichier CSV
+- � **Configuration flexible** : Adaptation automatique selon le type de page
+- 📈 **Statistiques détaillées** : Rapport complet du remplissage
+- 🎨 **Interface moderne** : Design épuré et intuitif
 
-- 🎯 **Intelligent Field Detection** - Advanced matching algorithm with 94%+ success rate
-- 🔤 **Smart Text Processing** - Handles complex field labels and multilingual forms
-- 📊 **Real-time Statistics** - Live feedback on detection and filling success
-- 🚀 **Dynamic Content Support** - Works with dynamically loaded forms via MutationObserver
-- ️ **Manifest V3 Compliant** - Modern security standards and future-proof
-- 💻 **Zero Dependencies** - Pure JavaScript, no external libraries
-- 🔧 **Professional Architecture** - Modular, scalable, and maintainable codebase
-- 📈 **Extensible Design** - Easy to add new fields and categories
+## 🆕 Nouveautés v2.0
+
+- ✅ **Suppression des données en dur** : Plus de données codées dans l'extension
+- ✅ **Upload CSV** : Chargez vos données personnelles via un fichier CSV
+- ✅ **Sécurité améliorée** : Vos données restent locales
+- ✅ **Flexibilité maximale** : Utilisez l'extension avec n'importe quelles données
+- ✅ **Validation avancée** : Vérification automatique du format CSV
 
 ## 📦 Installation
 
-1. **Clone the repository**
+1. Téléchargez ou clonez ce projet
+2. Ouvrez Chrome et accédez à `chrome://extensions/`
+3. Activez le "Mode développeur"
+4. Cliquez sur "Charger l'extension non empaquetée"
+5. Sélectionnez le dossier de l'extension
 
-   ```bash
-   git clone <repository-url>
-   cd auto-fill-google-forms
-   ```
+## 🎯 Utilisation
 
-2. **Load in Chrome**
-   - Open Chrome and navigate to `chrome://extensions/`
-   - Enable "Developer mode" in the top right corner
-   - Click "Load unpacked" and select the extension folder
-   - The extension icon should appear in your Chrome toolbar
+### 1. Préparer vos données
 
-## 🎯 Usage
+1. Créez un fichier CSV avec vos données personnelles
+2. Utilisez le fichier `example_data.csv` comme modèle
+3. Consultez le `CSV_GUIDE.md` pour les détails complets
 
-1. **Navigate** to any Google Forms page (`https://docs.google.com/forms/*`)
-2. **Click** the extension icon in the toolbar
-3. **Click** the "Fill Form" button in the popup
-4. **View** real-time statistics and results
+### 2. Charger les données
 
-### 📊 Statistics Display
+1. Cliquez sur l'icône de l'extension dans Chrome
+2. Cliquez sur "📁 Charger données CSV"
+3. Sélectionnez votre fichier CSV
+4. Attendez la confirmation de chargement
 
-- **Fields Detected**: Total form fields found
-- **Fields Filled**: Successfully filled fields
-- **Success Rate**: Percentage of successful matches
-- **Detailed Results**: Per-field matching information
+### 3. Remplir un formulaire
 
-## 👤 User Profile Data
+1. Naviguez vers le formulaire web
+2. Cliquez sur l'icône de l'extension
+3. Cliquez sur "Remplir le formulaire"
+4. Consultez les statistiques de remplissage
 
-The extension uses structured profile data for an African candidate:
+## � Structure du projet
 
-```javascript
-const USER_PROFILE = {
-  personal: {
-    lastName: "KONE",
-    firstName: "Amadou",
-    fullName: "Amadou KONE",
-    gender: "Masculin",
-    sex: "Homme",
-  },
-  contact: {
-    email: "amadou.kone@example.com",
-    phone: "+225 07 08 09 10 11",
-    mobile: "+225 07 08 09 10 11",
-  },
-  location: {
-    birthPlace: "Abidjan",
-    birthCountry: "Côte d'Ivoire",
-    residence: "Yamoussoukro",
-    nationality: "Ivoirienne",
-    address: "Cocody, Abidjan, Côte d'Ivoire",
-  },
-  documents: {
-    idNumber: "CI1234567890",
-    passportNumber: "CI1234567890",
-  },
-  family: {
-    fatherName: "Sekou KONE",
-    motherName: "Fatoumata TRAORE",
-  },
-  professional: {
-    profession: "Ingénieur informatique",
-    academicReason: "Académique - Poursuite d'études supérieures en France",
-  },
-  // ... more categories
-};
+```
+extension/
+├── manifest.json          # Configuration de l'extension
+├── background.js          # Script d'arrière-plan
+├── content.js            # Script de contenu principal
+├── popup.html            # Interface utilisateur
+├── popup.js              # Logique de l'interface
+├── example_data.csv      # Exemple de données CSV
+├── CSV_GUIDE.md          # Guide détaillé du format CSV
+├── README.md             # Ce fichier
+└── public/
+    └── icons/            # Icônes de l'extension
+        ├── icon16.png
+        ├── icon32.png
+        ├── icon48.png
+        └── icon128.png
 ```
 
-## 🔧 Adding New Fields
+## 🔧 Configuration CSV
 
-### Step 1: Update User Profile
+### Format requis
 
-```javascript
-const USER_PROFILE = {
-  // Add new category or extend existing
-  newCategory: {
+Votre fichier CSV doit contenir 37 colonnes spécifiques. Consultez `CSV_GUIDE.md` pour la liste complète.
+
+### Exemple minimal
+
+```csv
+lastName,firstName,fullName,gender,sex,email,phone,mobile,birthPlace,birthCountry,residence,residenceCountry,nationality,address,idNumber,passportNumber,cniNumber,fatherName,motherName,usualLanguage,motherLanguage,profession,company,academicReason,disabilities,birthDate,idExpirationDate,examSubjects,idType,examTypes,hasDisabilities,agreement,termsAccepted,preferredLanguage,hasExperience,needsAccommodation,isFirstTime
+DUPONT,Jean,"Jean DUPONT",Masculin,Homme,jean.dupont@email.com,0123456789,0123456789,Paris,France,Lyon,France,Française,"123 Rue Example, Lyon",FR123456789,FR123456789,FR123456789,Pierre DUPONT,Marie MARTIN,Français,Français,Développeur,TechCorp,Académique,Aucun,1985-03-15,2030-12-31,Tous,CNI,"CE,CO",Aucun,true,true,Français,true,false,true
+```
+
     newField: "New Value",
-  },
+
+},
 };
+
 ```
 
 ### Step 2: Add Field Mappings
 
-```javascript
-const FIELD_MAPPINGS = {
-  newCategory: {
-    newField: ["field variation 1", "field variation 2", "exact field text from form"],
-  },
-};
-```
+## 🎨 Interface utilisateur
 
-### Step 3: Test
+L'extension propose une interface moderne avec :
 
-The system automatically integrates new fields into the matching algorithm.
+- **Section upload** : Zone de glisser-déposer pour les fichiers CSV
+- **Status en temps réel** : Indication du statut de chargement
+- **Bouton de remplissage** : Action principale avec feedback visuel
+- **Statistiques détaillées** : Rapport complet avec métriques
+- **Résultats détaillés** : Liste des champs traités
 
-## 🏗️ Architecture
+## 🔍 Types de champs supportés
 
-### Core Classes
+- ✅ **Champs texte** : input[type="text"], textarea
+- ✅ **Emails** : input[type="email"]
+- ✅ **Téléphones** : input[type="tel"]
+- ✅ **Dates** : input[type="date"]
+- ✅ **Sélections** : select, dropdown
+- ✅ **Boutons radio** : input[type="radio"], role="radio"
+- ✅ **Cases à cocher** : input[type="checkbox"], role="checkbox"
 
-- **`FormDetector`** - Detects form containers and extracts questions
-- **`FieldMatcher`** - Intelligent field matching with scoring algorithm
-- **`FieldFiller`** - Handles form field value setting with proper events
-- **`FormAutoFiller`** - Main orchestration class
+## 🌐 Sites supportés
 
-### Matching Algorithm
+- **Google Forms** : Support complet avec sélecteurs optimisés
+- **Formulaires génériques** : Détection automatique des champs
+- **Pages locales** : Mode test pour le développement
 
-1. **Exact Match** (Score: 1.0) - Perfect text match
-2. **Inclusion Match** (Score: 0.6-0.95) - One contains the other
-3. **Keyword Pattern** (Score: 0.85) - Special keyword combinations
-4. **Word-based Match** (Score: 0.0-0.8) - Individual word matching
+## � Développement
 
-### Configuration
+### Structure du code
 
-- Minimum match score: `0.7`
-- Supported field types: `text`, `email`, `tel`, `textarea`
-- Skipped field types: `date`, `radio`, `checkbox`, `select`
+- `content.js` : Logique principale de détection et remplissage
+- `popup.js` : Interface utilisateur et gestion CSV
+- `background.js` : Gestion des permissions et communication
 
-## 📁 File Structure
+### Classes principales
 
-```
-extension/
-├── manifest.json          # Extension configuration (MV3)
-├── background.js          # Service worker (minimal)
-├── content.js             # Main form automation logic (600+ lines)
-├── popup.html             # User interface with statistics
-├── popup.js               # UI interaction logic
-├── public/icons/          # Extension icons (16, 48, 128px)
-├── README.md              # This file
-└── ARCHITECTURE.md        # Detailed architecture documentation
-```
+- `FormDetector` : Détection des éléments de formulaire
+- `FieldMatcher` : Correspondance intelligente des champs
+- `FieldFiller` : Remplissage des différents types de champs
+- `FormAutoFiller` : Orchestration principale
 
-## 🧪 Development & Testing
+## � Sécurité et confidentialité
 
-### Debug Mode
+- ✅ **Données locales** : Aucune transmission de données
+- ✅ **Permissions minimales** : Accès uniquement aux onglets actifs
+- ✅ **Code open source** : Transparence totale
+- ✅ **Pas de tracking** : Aucune collecte de données
 
-On localhost, classes are exposed for testing:
+## 🐛 Dépannage
 
-```javascript
-// Available in browser console
-window.AutoFillClasses.FormDetector;
-window.AutoFillClasses.FieldMatcher;
-window.AutoFillClasses.FormAutoFiller;
-```
+### Problèmes courants
 
-### Message API
+1. **Champs non remplis** :
+   - Vérifiez que votre CSV est correctement formaté
+   - Consultez la console pour les erreurs
 
-- `fillForm` - Fill the current form
-- `getUserProfile` - Get user profile data
-- `getFieldMappings` - Get field mappings structure
+2. **CSV non reconnu** :
+   - Vérifiez le nombre de colonnes (37 requis)
+   - Utilisez l'exemple fourni comme base
 
-## 🔒 Privacy & Security
+3. **Formulaire non détecté** :
+   - Actualisez la page
+   - Vérifiez que la page contient des formulaires
 
-- ✅ **No External Calls** - All processing done locally
-- ✅ **No Data Transmission** - Data never leaves your browser
-- ✅ **No Storage** - No persistent data storage
-- ✅ **No Tracking** - No user analytics or tracking
-- ✅ **Open Source** - Full code transparency
+### Debug
 
-## 🚀 Performance
+Ouvrez la console développeur (F12) pour voir les logs détaillés :
+- `[AutoFill]` : Messages de l'extension
+- Statistiques de détection
+- Erreurs de remplissage
 
-- **Fast Detection** - Optimized DOM querying with fallbacks
-- **Smart Caching** - Computed values cached for efficiency
-- **Minimal Overhead** - Lightweight event listeners
-- **Memory Efficient** - No memory leaks or persistent references
+## 📊 Métriques
 
-## 🐛 Error Handling
+L'extension fournit des statistiques complètes :
 
-- Comprehensive try-catch blocks
-- Graceful degradation for unsupported fields
-- Detailed error logging with context
-- Fallback mechanisms for edge cases
-- User-friendly error messages in popup
+- **Questions détectées** : Nombre total de champs trouvés
+- **Champs remplis** : Nombre de champs complétés avec succès
+- **Taux de réussite** : Pourcentage de réussite global
+- **Détails par champ** : Statut individuel de chaque champ
 
-## 📈 Future Extensibility
+## 🤝 Contribution
 
-### Planned Features
+Les contributions sont les bienvenues ! N'hésitez pas à :
 
-- Multiple user profiles
-- Custom field mappings UI
-- Form-specific templates
-- Import/export configurations
-- Cloud synchronization
-- AI-powered field detection
+1. Signaler des bugs
+2. Proposer des améliorations
+3. Soumettre des pull requests
+4. Améliorer la documentation
 
-### Extension Points
+## 📄 Licence
 
-- Easy category addition
-- Configurable matching thresholds
-- Custom selector patterns
-- Plugin architecture for new form types
+Ce projet est distribué sous licence MIT. Voir le fichier LICENSE pour plus de détails.
 
-## 📄 License
+## 🆘 Support
 
-MIT License - Feel free to use, modify, and distribute.
+Pour obtenir de l'aide :
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes following the architecture
-4. Test thoroughly
-5. Submit a pull request
-
-## 📚 Documentation
-
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Detailed technical documentation
-- **[manifest.json](manifest.json)** - Extension configuration
-- **Code Comments** - Extensive inline documentation
+1. Consultez ce README et le `CSV_GUIDE.md`
+2. Vérifiez les issues existantes
+3. Créez une nouvelle issue si nécessaire
+4. Incluez les logs de la console pour les bugs
 
 ---
 
-**Built with ❤️ for professional form automation**
-
-- Includes fallback mechanisms for different Google Forms layouts
-
-### Message Passing
-
-- Popup ↔ Background ↔ Content Script communication
-- Async message handling with proper response callbacks
-- Error handling and user feedback
-
-## Customization
-
-To modify the auto-fill data, edit the `DICT` object in `content.js`:
-
-```javascript
-const DICT = {
-  // Add your custom key-value pairs here
-  your_field_name: "your_value",
-};
+**Développé avec ❤️ pour simplifier le remplissage de formulaires web**
 ```
-
-The extension matches form fields by checking if the question label contains any of the dictionary keys (case-insensitive).
-
-## Limitations
-
-- Only supports text inputs and textareas
-- Does not handle checkboxes, radio buttons, or select dropdowns
-- Uses hard-coded data dictionary (no storage or options page)
-- Only works on Google Forms (docs.google.com/forms/\*)
-
-## Browser Compatibility
-
-- Chrome 88+ (Manifest V3 support required)
-- Edge 88+ (Chromium-based)
-
-## License
-
-This project is open source and available under the MIT License.
