@@ -7,7 +7,7 @@
   "short_name": "FillEngine",
   "homepage_url": "https://github.com/tiger-githubb/FillEngine",
 
-  "permissions": ["activeTab"],
+  "permissions": ["activeTab", "storage"],
 
   "host_permissions": ["https://docs.google.com/forms/*"],
 

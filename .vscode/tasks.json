@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Test Extension",
+      "type": "shell",
+      "command": "cd '/Users/aristide/Desktop/personnal/extention' && open .",
+      "group": "test",
+      "isBackground": false
+    }
+  ]
+}
