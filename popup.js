@@ -21,16 +21,403 @@ document.addEventListener("DOMContentLoaded", function () {
   const profileName = document.getElementById("profileName");
   const profileDetails = document.getElementById("profileDetails");
 
+  // New DOM Elements for profiles
+  const profileModeBtn = document.getElementById("profileModeBtn");
+  const csvModeBtn = document.getElementById("csvModeBtn");
+  const profileSection = document.getElementById("profileSection");
+  const csvSection = document.getElementById("csvSection");
+  const profileSelect = document.getElementById("profileSelect");
+  const profilePreview = document.getElementById("profilePreview");
+
   console.log("🔧 DOM ELEMENTS FOUND:");
   console.log("├── fillFormBtn:", !!fillFormBtn);
   console.log("├── csvFileInput:", !!csvFileInput);
   console.log("├── fileStatus:", !!fileStatus);
-  console.log("└── userProfileDisplay:", !!userProfileDisplay);
+  console.log("├── userProfileDisplay:", !!userProfileDisplay);
+  console.log("├── profileModeBtn:", !!profileModeBtn);
+  console.log("├── csvModeBtn:", !!csvModeBtn);
+  console.log("├── profileSelect:", !!profileSelect);
+  console.log("└── profilePreview:", !!profilePreview);
 
-  // Current user data (will be updated when CSV is loaded)
+  // Current user data (will be updated when CSV is loaded or profile selected)
   let currentUserData = null;
+  let currentMode = "profiles"; // "profiles" or "csv"
+  let availableProfiles = [];
 
   // Note: fillForm function will be declared after all helper functions
+
+  /**
+   * Load and parse the built-in profiles database
+   * @returns {Promise<Array>} Array of profile objects
+   */
+  async function loadProfilesDatabase() {
+    try {
+      const response = await fetch(chrome.runtime.getURL("data/profiles.csv"));
+      const csvContent = await response.text();
+
+      console.log("🗄️ Profiles database loaded");
+      console.log("├── Content length:", csvContent.length);
+
+      return parseProfilesCSV(csvContent);
+    } catch (error) {
+      console.error("Error loading profiles database:", error);
+      throw new Error("Impossible de charger la base de données des profils");
+    }
+  }
+
+  /**
+   * Parse profiles CSV content and convert to array of profile objects
+   * @param {string} csvContent - Raw CSV content with multiple profiles
+   * @returns {Array} Array of parsed profile objects
+   */
+  function parseProfilesCSV(csvContent) {
+    try {
+      const lines = csvContent.trim().split("\n");
+      if (lines.length < 2) {
+        throw new Error("CSV doit contenir au moins 2 lignes (en-tête + données)");
+      }
+
+      // Improved CSV parsing to handle quoted values
+      function parseCSVLine(line) {
+        const result = [];
+        let current = "";
+        let inQuotes = false;
+
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+
+          if (char === '"' && (i === 0 || line[i - 1] === ",")) {
+            inQuotes = true;
+          } else if (char === '"' && inQuotes && (i === line.length - 1 || line[i + 1] === ",")) {
+            inQuotes = false;
+          } else if (char === "," && !inQuotes) {
+            result.push(current.trim());
+            current = "";
+          } else {
+            current += char;
+          }
+        }
+        result.push(current.trim());
+        return result.map((value) => value.replace(/^"(.*)"$/, "$1")); // Remove outer quotes
+      }
+
+      const headers = parseCSVLine(lines[0]);
+      const profiles = [];
+
+      // Parse each profile line
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]);
+
+        if (headers.length !== values.length) {
+          console.warn(
+            `Ligne ${i + 1}: Nombre d'en-têtes (${headers.length}) ne correspond pas au nombre de valeurs (${values.length})`
+          );
+          continue;
+        }
+
+        const profile = parseProfileFromValues(headers, values);
+        if (profile) {
+          profiles.push(profile);
+        }
+      }
+
+      console.log(`✅ Parsed ${profiles.length} profiles from database`);
+      return profiles;
+    } catch (error) {
+      console.error("Erreur de parsing du CSV des profils:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Parse a single profile from headers and values
+   * @param {Array} headers - CSV headers
+   * @param {Array} values - CSV values for this profile
+   * @returns {Object|null} Parsed profile object or null if error
+   */
+  function parseProfileFromValues(headers, values) {
+    try {
+      // Create user profile object
+      const userProfile = {
+        id: null,
+        personal: {},
+        contact: {},
+        location: {},
+        documents: {},
+        family: {},
+        languages: {},
+        professional: {},
+        medical: {},
+        dates: {},
+        misc: {},
+        choices: {},
+      };
+
+      // Map CSV fields to user profile structure
+      const fieldMapping = {
+        id: ["id"],
+        lastName: ["personal", "lastName"],
+        firstName: ["personal", "firstName"],
+        fullName: ["personal", "fullName"],
+        gender: ["personal", "gender"],
+        sex: ["personal", "sex"],
+        email: ["contact", "email"],
+        phone: ["contact", "phone"],
+        mobile: ["contact", "mobile"],
+        birthPlace: ["location", "birthPlace"],
+        birthCountry: ["location", "birthCountry"],
+        residence: ["location", "residence"],
+        residenceCountry: ["location", "residenceCountry"],
+        nationality: ["location", "nationality"],
+        address: ["location", "address"],
+        idNumber: ["documents", "idNumber"],
+        passportNumber: ["documents", "passportNumber"],
+        cniNumber: ["documents", "cniNumber"],
+        fatherName: ["family", "fatherName"],
+        motherName: ["family", "motherName"],
+        usualLanguage: ["languages", "usual"],
+        motherLanguage: ["languages", "mother"],
+        profession: ["professional", "profession"],
+        company: ["professional", "company"],
+        academicReason: ["professional", "academicReason"],
+        disabilities: ["medical", "disabilities"],
+        birthDate: ["dates", "birthDate"],
+        idExpirationDate: ["dates", "idExpirationDate"],
+        examSubjects: ["misc", "examSubjects"],
+        idType: ["choices", "idType"],
+        examTypes: ["choices", "examTypes"],
+        hasDisabilities: ["choices", "hasDisabilities"],
+        agreement: ["choices", "agreement"],
+        termsAccepted: ["choices", "termsAccepted"],
+        preferredLanguage: ["choices", "preferredLanguage"],
+        hasExperience: ["choices", "hasExperience"],
+        needsAccommodation: ["choices", "needsAccommodation"],
+        isFirstTime: ["choices", "isFirstTime"],
+      };
+
+      // Populate user profile
+      let fieldsProcessed = 0;
+      headers.forEach((header, index) => {
+        const mapping = fieldMapping[header];
+        if (mapping && values[index] !== undefined && values[index] !== "") {
+          let value = values[index];
+
+          // Handle special data types
+          if ((header === "examTypes" || header === "examSubjects") && value.includes(",")) {
+            value = value.split(",").map((v) => v.trim());
+          } else if (["agreement", "termsAccepted", "hasExperience", "needsAccommodation", "isFirstTime"].includes(header)) {
+            value = value.toLowerCase() === "true";
+          }
+
+          if (mapping.length === 1) {
+            // Special case for 'id'
+            userProfile[mapping[0]] = value;
+          } else {
+            const [category, field] = mapping;
+            userProfile[category][field] = value;
+
+            // Auto-create examTypesFull when examTypes is processed
+            if (field === "examTypes" && Array.isArray(value)) {
+              const examTypesMapping = {
+                CE: "Compréhension écrite",
+                CO: "Compréhension orale",
+                EE: "Expression écrite",
+                EO: "Expression orale",
+              };
+
+              const fullNames = value.map((code) => examTypesMapping[code] || code);
+              userProfile[category].examTypesFull = fullNames;
+              console.log(`Auto-created examTypesFull:`, fullNames);
+            }
+
+            // Auto-create examSubjectsFull when examSubjects is processed
+            if (field === "examSubjects" && Array.isArray(value)) {
+              const examSubjectsMapping = {
+                CE: "Comprehension écrite",
+                CO: "comprehension orale",
+                EE: "expression ecrite",
+                EO: "expression orale",
+              };
+
+              const fullNames = value.map((code) => examSubjectsMapping[code] || code);
+              userProfile[category].examSubjectsFull = fullNames;
+              console.log(`Auto-created examSubjectsFull:`, fullNames);
+            }
+          }
+          fieldsProcessed++;
+        }
+      });
+
+      if (fieldsProcessed === 0 || !userProfile.id) {
+        console.warn("Profil ignoré: aucun champ valide ou ID manquant");
+        return null;
+      }
+
+      return userProfile;
+    } catch (error) {
+      console.error("Erreur lors du parsing du profil:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Switch between profiles and CSV upload modes
+   * @param {string} mode - "profiles" or "csv"
+   */
+  function switchMode(mode) {
+    currentMode = mode;
+
+    if (mode === "profiles") {
+      profileModeBtn.classList.add("active");
+      csvModeBtn.classList.remove("active");
+      profileSection.classList.remove("hidden");
+      csvSection.classList.add("hidden");
+
+      console.log("🔄 Switched to profiles mode");
+    } else {
+      csvModeBtn.classList.add("active");
+      profileModeBtn.classList.remove("active");
+      csvSection.classList.remove("hidden");
+      profileSection.classList.add("hidden");
+
+      console.log("🔄 Switched to CSV upload mode");
+    }
+
+    // Reset current data when switching modes
+    currentUserData = null;
+    hideUserProfile();
+    updateFillButtonState();
+  }
+
+  /**
+   * Populate the profile selection dropdown
+   * @param {Array} profiles - Array of profile objects
+   */
+  function populateProfileSelect(profiles) {
+    profileSelect.innerHTML = '<option value="">-- Choisir un profil --</option>';
+
+    profiles.forEach((profile) => {
+      const option = document.createElement("option");
+      option.value = profile.id;
+
+      const name =
+        profile.personal?.fullName ||
+        `${profile.personal?.firstName || ""} ${profile.personal?.lastName || ""}`.trim() ||
+        `Profil ${profile.id}`;
+
+      const profession = profile.professional?.profession || "";
+      const company = profile.professional?.company || "";
+
+      let displayText = `[${profile.id}] ${name}`;
+      if (profession) {
+        displayText += ` - ${profession}`;
+      }
+
+      option.textContent = displayText;
+      option.dataset.profile = JSON.stringify(profile);
+
+      profileSelect.appendChild(option);
+    });
+
+    console.log(`✅ Populated profile selector with ${profiles.length} profiles`);
+  }
+
+  /**
+   * Handle profile selection
+   * @param {string} profileId - Selected profile ID
+   */
+  function handleProfileSelection(profileId) {
+    if (!profileId) {
+      currentUserData = null;
+      profilePreview.style.display = "none";
+      hideUserProfile();
+      updateFillButtonState();
+      return;
+    }
+
+    const selectedOption = profileSelect.querySelector(`option[value="${profileId}"]`);
+    if (!selectedOption) {
+      console.error("Profile not found:", profileId);
+      return;
+    }
+
+    try {
+      const profile = JSON.parse(selectedOption.dataset.profile);
+      currentUserData = profile;
+
+      console.log("✅ Profile selected:", profile.id);
+      console.log("├── Name:", profile.personal?.fullName);
+      console.log("├── Email:", profile.contact?.email);
+      console.log("└── Profession:", profile.professional?.profession);
+
+      // Show profile preview
+      showProfilePreview(profile);
+
+      // Update main profile display
+      updateProfileDisplay(profile);
+
+      // Update fill button state
+      updateFillButtonState();
+    } catch (error) {
+      console.error("Error parsing selected profile:", error);
+      currentUserData = null;
+      updateFillButtonState();
+    }
+  }
+
+  /**
+   * Show profile preview in the selection section
+   * @param {Object} profile - Selected profile
+   */
+  function showProfilePreview(profile) {
+    const name = profile.personal?.fullName || `Profil ${profile.id}`;
+    const email = profile.contact?.email || "";
+    const profession = profile.professional?.profession || "";
+
+    let previewText = `✅ ${name}`;
+    if (email) previewText += ` • ${email}`;
+    if (profession) previewText += ` • ${profession}`;
+
+    profilePreview.textContent = previewText;
+    profilePreview.style.display = "block";
+  }
+
+  /**
+   * Update fill button state based on current data and page
+   */
+  async function updateFillButtonState() {
+    try {
+      const isFormsPage = await isGoogleFormsPage();
+
+      if (!isFormsPage) {
+        fillFormBtn.disabled = true;
+        fillFormBtn.style.background = "#e1e8ed";
+        fillFormBtn.style.color = "#8a9ba8";
+        fillFormBtn.title = "Naviguez vers une page Google Forms";
+        showStatus("Page Google Forms requise", "error");
+      } else if (!currentUserData) {
+        fillFormBtn.disabled = true;
+        fillFormBtn.style.background = "#e1e8ed";
+        fillFormBtn.style.color = "#8a9ba8";
+
+        if (currentMode === "profiles") {
+          fillFormBtn.title = "Sélectionnez un profil";
+          showStatus("Sélectionnez un profil pour commencer", "error");
+        } else {
+          fillFormBtn.title = "Chargez un fichier CSV";
+          showStatus("Chargez un fichier CSV pour commencer", "error");
+        }
+      } else {
+        fillFormBtn.disabled = false;
+        fillFormBtn.style.background = "";
+        fillFormBtn.style.color = "";
+        fillFormBtn.title = "";
+        statusDiv.style.display = "none";
+      }
+    } catch (error) {
+      console.error("Error updating button state:", error);
+    }
+  }
 
   /**
    * Shows a file status message
@@ -169,6 +556,20 @@ document.addEventListener("DOMContentLoaded", function () {
           }
 
           userProfile[category][field] = value;
+
+          // Auto-create examTypesFull when examTypes is processed
+          if (field === "examTypes" && Array.isArray(value)) {
+            const examTypesMapping = {
+              CE: "Compréhension écrite",
+              CO: "Compréhension orale",
+              EE: "Expression écrite",
+              EO: "Expression orale",
+            };
+
+            const fullNames = value.map((code) => examTypesMapping[code] || code);
+            userProfile[category].examTypesFull = fullNames;
+          }
+
           fieldsProcessed++;
           console.log(`Mapped ${header} -> ${category}.${field} = ${value}`);
         } else if (mapping) {
@@ -379,23 +780,6 @@ document.addEventListener("DOMContentLoaded", function () {
           currentUserData = userData;
           showFileStatus(`✅ Fichier chargé: ${file.name}`, "success");
 
-          // Enable fill button if we're on a forms page
-          isGoogleFormsPage()
-            .then((isFormsPage) => {
-              if (isFormsPage) {
-                fillFormBtn.disabled = false;
-                fillFormBtn.style.background = "";
-                fillFormBtn.style.color = "";
-                fillFormBtn.title = "";
-                console.log("Fill button enabled - ready to fill forms");
-              } else {
-                console.log("Not on Google Forms page, fill button remains disabled");
-              }
-            })
-            .catch((error) => {
-              console.error("Error checking if on Google Forms page:", error);
-            });
-
           console.log("CSV data successfully loaded and ready to use");
           console.log("📊 DETAILED USER DATA LOADED:");
           console.log("├── Personal:", userData.personal);
@@ -407,6 +791,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
           // Display user profile information
           updateProfileDisplay(userData);
+
+          // Update fill button state
+          updateFillButtonState();
         } else {
           throw new Error("Données CSV invalides - pas de données retournées");
         }
@@ -575,15 +962,26 @@ document.addEventListener("DOMContentLoaded", function () {
     // Keep popup open during operations
     keepPopupOpen();
 
+    // Initialize profiles mode by default
+    initializeProfilesMode();
+
+    // Add mode switcher handlers
+    profileModeBtn.addEventListener("click", () => switchMode("profiles"));
+    csvModeBtn.addEventListener("click", () => switchMode("csv"));
+
+    // Add profile selection handler
+    profileSelect.addEventListener("change", (e) => {
+      console.log("📋 Profile selection changed:", e.target.value);
+      handleProfileSelection(e.target.value);
+    });
+
     // Add click handler to button
     fillFormBtn.addEventListener("click", (e) => {
       console.log("🖱️ FILL FORM BUTTON CLICKED - EVENT TRIGGERED");
       console.log("├── Event object:", e);
       console.log("├── Target:", e.target);
+      console.log("├── Current mode:", currentMode);
       console.log("└── Button element:", fillFormBtn);
-
-      // Don't prevent default or stop propagation for our button
-      // Let the event flow naturally
 
       console.log("🔄 CALLING fillForm function...");
 
@@ -597,7 +995,9 @@ document.addEventListener("DOMContentLoaded", function () {
       try {
         if (!currentUserData) {
           console.log("⚠️ No user data - calling showStatus...");
-          showStatus("Veuillez d'abord charger un fichier CSV", "error");
+          const message =
+            currentMode === "profiles" ? "Veuillez d'abord sélectionner un profil" : "Veuillez d'abord charger un fichier CSV";
+          showStatus(message, "error");
           return;
         }
 
@@ -620,61 +1020,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     console.log("🔧 EVENT LISTENERS ADDED");
     console.log("├── Fill button click handler: ✅");
-    console.log("└── CSV input change handler: ✅");
-
-    // Test if the button is actually clickable
-    console.log("🔍 BUTTON STATE CHECK:");
-    console.log("├── Button element:", fillFormBtn);
-    console.log("├── Button disabled:", fillFormBtn.disabled);
-    console.log("├── Button style display:", fillFormBtn.style.display);
-    console.log("├── Button onclick:", fillFormBtn.onclick);
-    console.log("└── Button addEventListener should be working now");
-
-    // Try to simulate a click programmatically for testing
-    setTimeout(() => {
-      console.log("🧪 TESTING PROGRAMMATIC CLICK IN 2 SECONDS...");
-      // fillFormBtn.click(); // Commented out for now
-    }, 2000);
-
-    // Test function to verify popup is working
-    function testPopupFunctionality() {
-      console.log("🧪 TESTING POPUP FUNCTIONALITY");
-
-      // Test if we can query active tab
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        console.log("🔗 ACTIVE TAB QUERY RESULT:");
-        console.log("├── Tabs found:", tabs.length);
-        if (tabs.length > 0) {
-          console.log("├── Current URL:", tabs[0].url);
-          console.log("├── Tab ID:", tabs[0].id);
-          console.log("└── Tab title:", tabs[0].title);
-        } else {
-          console.log("└── No active tab found");
-        }
-      });
-
-      // Test file input
-      if (csvFileInput) {
-        console.log("✅ CSV input element found");
-      } else {
-        console.log("❌ CSV input element NOT found");
-      }
-
-      // Test fill button
-      if (fillFormBtn) {
-        console.log("✅ Fill button element found");
-        console.log("├── Button disabled:", fillFormBtn.disabled);
-        console.log("└── Button text:", fillFormBtn.textContent);
-      } else {
-        console.log("❌ Fill button element NOT found");
-      }
-    }
-
-    // Run test immediately
-    testPopupFunctionality();
-
-    // Also test in 1 second in case there's a timing issue
-    setTimeout(testPopupFunctionality, 1000);
+    console.log("├── CSV input change handler: ✅");
+    console.log("├── Mode switcher handlers: ✅");
+    console.log("└── Profile selection handler: ✅");
 
     // Prevent form submission that might close popup
     const form = document.querySelector("form");
@@ -694,24 +1042,8 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
-    // Check initial page state
-    isGoogleFormsPage()
-      .then((isFormsPage) => {
-        if (!isFormsPage) {
-          fillFormBtn.disabled = true;
-          fillFormBtn.style.background = "#e1e8ed";
-          fillFormBtn.style.color = "#8a9ba8";
-          fillFormBtn.title = "Naviguez vers une page Google Forms";
-          showStatus("Page Google Forms requise", "error");
-        } else if (!currentUserData) {
-          // Show info about CSV upload
-          showFileStatus("Chargez un fichier CSV pour commencer", "error");
-        }
-      })
-      .catch((error) => {
-        console.error("Error checking page state:", error);
-        showFileStatus("Erreur lors de la vérification de la page", "error");
-      });
+    // Initial button state update
+    updateFillButtonState();
   }
 
   // Note: fillForm function moved up for proper scope
@@ -791,6 +1123,37 @@ document.addEventListener("DOMContentLoaded", function () {
       console.error("❌ UNEXPECTED ERROR in fillForm:", error);
       setButtonLoading(false);
       showStatus("Erreur inattendue", "error");
+    }
+  }
+
+  /**
+   * Initialize profiles mode - load and populate profiles
+   */
+  async function initializeProfilesMode() {
+    try {
+      console.log("🚀 Initializing profiles mode...");
+
+      // Load profiles from database
+      availableProfiles = await loadProfilesDatabase();
+
+      // Populate the select dropdown
+      populateProfileSelect(availableProfiles);
+
+      console.log("✅ Profiles mode initialized successfully");
+      console.log(`├── Loaded ${availableProfiles.length} profiles`);
+      console.log("└── Profile selector populated");
+    } catch (error) {
+      console.error("❌ Error initializing profiles mode:", error);
+
+      // Show error in the profile section
+      profileSelect.innerHTML = '<option value="">Erreur de chargement des profils</option>';
+      profileSelect.disabled = true;
+
+      // Optionally switch to CSV mode as fallback
+      setTimeout(() => {
+        console.log("🔄 Switching to CSV mode as fallback");
+        switchMode("csv");
+      }, 1000);
     }
   }
 

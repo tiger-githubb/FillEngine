@@ -286,6 +286,33 @@ function generateFlatDictionary() {
         value = USER_PROFILE.dates[fieldType];
       } else if (category === "choices" && USER_PROFILE.choices && USER_PROFILE.choices[fieldType]) {
         value = USER_PROFILE.choices[fieldType];
+
+        // Special handling for examTypes: create both short codes and full names in dictionary
+        if (fieldType === "examTypes" && Array.isArray(value)) {
+          // Map short codes to full names for examTypesFull
+          const examTypesMapping = {
+            CE: "Compréhension écrite",
+            CO: "Compréhension orale",
+            EE: "Expression écrite",
+            EO: "Expression orale",
+          };
+
+          const fullNames = value.map((code) => examTypesMapping[code] || code);
+          USER_PROFILE.choices.examTypesFull = fullNames;
+
+          // Add both formats to the dictionary
+          variations.forEach((variation) => {
+            flatDict[variation] = value; // Short codes array
+          });
+
+          // Also add full names variations
+          const fullNamesVariations = ["sujet d'examen complet", "sujets d'examen complets", "matières d'examen"];
+          fullNamesVariations.forEach((variation) => {
+            flatDict[variation] = fullNames; // Full names array
+          });
+
+          return; // Skip the normal processing for this field
+        }
       } else if (USER_PROFILE[category] && USER_PROFILE[category][fieldType]) {
         value = USER_PROFILE[category][fieldType];
       } else {
@@ -1276,14 +1303,66 @@ class FieldFiller {
     }
 
     try {
-      // Find the checkbox group container
-      const checkboxGroup = checkboxField.closest('[role="group"]') || checkboxField.parentElement;
+      // First, try to find the checkbox group container at different levels
+      let checkboxGroup = checkboxField.closest('[role="group"]');
       if (!checkboxGroup) {
-        Logger.debug("Could not find Google Forms checkbox group");
-        return false;
+        checkboxGroup = checkboxField.closest('[data-params*="checkbox"]');
+      }
+      if (!checkboxGroup) {
+        checkboxGroup = checkboxField.closest("div[data-params]");
+      }
+      if (!checkboxGroup) {
+        // Fallback: go up until we find a container with multiple checkboxes
+        let parent = checkboxField.parentElement;
+        while (parent && parent !== document.body) {
+          const checkboxesInParent = parent.querySelectorAll('[role="checkbox"]');
+          if (checkboxesInParent.length > 1) {
+            checkboxGroup = parent;
+            break;
+          }
+          parent = parent.parentElement;
+        }
       }
 
-      const checkboxes = checkboxGroup.querySelectorAll('[role="checkbox"]');
+      if (!checkboxGroup) {
+        Logger.debug("Could not find Google Forms checkbox group, searching in entire document");
+        // Last resort: search for all checkboxes in the document and filter by context
+        checkboxGroup = document;
+      }
+
+      let checkboxes = checkboxGroup.querySelectorAll('[role="checkbox"]');
+
+      // Debug: Log the container and all found checkboxes
+      console.log(`🔥 CONTAINER DEBUG:`, checkboxGroup);
+      console.log(`🔥 CONTAINER TAG:`, checkboxGroup.tagName);
+      console.log(`🔥 CONTAINER CLASSES:`, checkboxGroup.className);
+      console.log(`🔥 INITIAL CHECKBOX FIELD:`, checkboxField);
+      console.log(`🔥 FOUND ${checkboxes.length} CHECKBOXES IN CONTAINER`);
+
+      // If we still have only 1 checkbox, try a broader search
+      if (checkboxes.length <= 1) {
+        Logger.debug("Only found 1 or fewer checkboxes, trying broader search");
+        console.log(`🔥 TRYING BROADER SEARCH - looking for nearby checkboxes`);
+
+        // Look for the question container (usually contains the question text and all options)
+        let questionContainer = checkboxField.closest("[data-params]");
+        if (!questionContainer) {
+          questionContainer = checkboxField.closest('div[role="listitem"]');
+        }
+        if (!questionContainer) {
+          questionContainer = checkboxField.closest('div[class*="question"]');
+        }
+
+        if (questionContainer) {
+          const allCheckboxesInQuestion = questionContainer.querySelectorAll('[role="checkbox"]');
+          console.log(`🔥 BROADER SEARCH: Found ${allCheckboxesInQuestion.length} checkboxes in question container`);
+
+          if (allCheckboxesInQuestion.length > checkboxes.length) {
+            checkboxes = allCheckboxesInQuestion; // Use the broader search results
+            console.log(`🔥 USING BROADER SEARCH RESULTS: ${checkboxes.length} checkboxes`);
+          }
+        }
+      }
       let successCount = 0;
 
       // Get all available options to determine format
@@ -1298,35 +1377,115 @@ class FieldFiller {
 
       // Determine format and choose appropriate values
       const isCodesFormat = availableOptions.some((option) => ["ce", "co", "ee", "eo"].includes(option));
-      const isFullNamesFormat = availableOptions.some((option) => option.includes("comprehension") || option.includes("expression"));
+      const isFullNamesFormat = availableOptions.some(
+        (option) =>
+          option.includes("compréhension") ||
+          option.includes("comprehension") ||
+          option.includes("expression") ||
+          option.includes("écrite") ||
+          option.includes("orale")
+      );
 
       Logger.debug(`Google Forms format - Codes: ${isCodesFormat}, Full names: ${isFullNamesFormat}`);
 
       let valuesToUse = [];
+
+      // Try multiple sources for the values
       if (isCodesFormat) {
-        valuesToUse = USER_PROFILE.choices.examTypes; // ["CE", "CO"]
+        // Try examTypes first, then examSubjects
+        if (USER_PROFILE.choices && USER_PROFILE.choices.examTypes) {
+          valuesToUse = Array.isArray(USER_PROFILE.choices.examTypes)
+            ? USER_PROFILE.choices.examTypes
+            : [USER_PROFILE.choices.examTypes];
+          Logger.debug(`Using short codes from examTypes for Google Forms:`, valuesToUse);
+        } else if (USER_PROFILE.misc && USER_PROFILE.misc.examSubjects) {
+          const examSubjects = Array.isArray(USER_PROFILE.misc.examSubjects)
+            ? USER_PROFILE.misc.examSubjects
+            : [USER_PROFILE.misc.examSubjects];
+          // Convert examSubjects to short codes if needed
+          const codeMapping = {
+            "Compréhension écrite": "CE",
+            "comprehension écrite": "CE",
+            "Compréhension orale": "CO",
+            "comprehension orale": "CO",
+            "Expression écrite": "EE",
+            "expression ecrite": "EE",
+            "Expression orale": "EO",
+            "expression orale": "EO",
+          };
+          valuesToUse = examSubjects.map((subject) => codeMapping[subject] || subject);
+          Logger.debug(`Using short codes from examSubjects for Google Forms:`, valuesToUse);
+        }
       } else if (isFullNamesFormat) {
-        valuesToUse = USER_PROFILE.choices.examTypesFull; // ["Comprehension écrite", "comprehension orale"]
-      } else {
-        valuesToUse = values;
+        // Try examTypesFull first, then examSubjectsFull, then examSubjects
+        if (USER_PROFILE.choices && USER_PROFILE.choices.examTypesFull) {
+          valuesToUse = Array.isArray(USER_PROFILE.choices.examTypesFull)
+            ? USER_PROFILE.choices.examTypesFull
+            : [USER_PROFILE.choices.examTypesFull];
+          Logger.debug(`Using full names from examTypesFull for Google Forms:`, valuesToUse);
+        } else if (USER_PROFILE.misc && USER_PROFILE.misc.examSubjectsFull) {
+          valuesToUse = Array.isArray(USER_PROFILE.misc.examSubjectsFull)
+            ? USER_PROFILE.misc.examSubjectsFull
+            : [USER_PROFILE.misc.examSubjectsFull];
+          Logger.debug(`Using full names from examSubjectsFull for Google Forms:`, valuesToUse);
+        } else if (USER_PROFILE.misc && USER_PROFILE.misc.examSubjects) {
+          valuesToUse = Array.isArray(USER_PROFILE.misc.examSubjects)
+            ? USER_PROFILE.misc.examSubjects
+            : [USER_PROFILE.misc.examSubjects];
+          Logger.debug(`Using examSubjects directly for Google Forms:`, valuesToUse);
+        }
+      }
+
+      // Fallback to provided values if nothing found
+      if (valuesToUse.length === 0) {
+        valuesToUse = Array.isArray(values) ? values : [values];
+        Logger.debug(`Using fallback values for Google Forms:`, valuesToUse);
       }
 
       Logger.debug(`Using values for Google Forms matching:`, valuesToUse);
 
-      valuesToUse.forEach((value) => {
-        const targetValue = String(value).toLowerCase().trim();
+      // SIMPLE LOG: Show what values we're trying to match
+      console.log(`🔥 DEBUGGING CHECKBOX MATCHING - Values to match: [${valuesToUse.join(", ")}]`);
 
-        for (const checkbox of checkboxes) {
+      // First, log all available checkbox options for debugging
+      const allCheckboxLabels = Array.from(checkboxes).map((cb, index) => {
+        const label = this.getGoogleFormsLabel(cb);
+        const dataValue = cb.getAttribute("data-value");
+        console.log(`🔥 Checkbox [${index}]: "${label}" (data-value: "${dataValue}")`);
+        return `${index}: "${label}" (data-value: "${dataValue}")`;
+      });
+
+      console.log(`🔥 Found ${checkboxes.length} total checkboxes`);
+
+      valuesToUse.forEach((value, valueIndex) => {
+        const targetValue = String(value).toLowerCase().trim();
+        let matchedForThisValue = false;
+        console.log(`� [${valueIndex + 1}/${valuesToUse.length}] Looking for: "${value}" (normalized: "${targetValue}")`);
+
+        // Try exact matches first, then equivalences
+        let exactMatchFound = false;
+
+        // Phase 1: Look for exact matches first
+        for (let i = 0; i < checkboxes.length; i++) {
+          const checkbox = checkboxes[i];
           const label = this.getGoogleFormsLabel(checkbox);
           const dataValue = checkbox.getAttribute("data-value");
 
-          if (!label && !dataValue) continue;
+          if (!label && !dataValue) {
+            console.log(`🔥   [${i}] SKIP - No label or data-value`);
+            continue;
+          }
 
           const labelValue = label ? label.toLowerCase().trim() : "";
           const dataValueLower = dataValue ? dataValue.toLowerCase().trim() : "";
 
-          // Enhanced matching logic
-          if (this.isCheckboxValueMatch(targetValue, labelValue) || this.isCheckboxValueMatch(targetValue, dataValueLower)) {
+          console.log(`🔥   [${i}] Testing: label="${labelValue}", data-value="${dataValueLower}"`);
+
+          // Check for exact matches only
+          if (labelValue === targetValue || dataValueLower === targetValue) {
+            console.log(`🔥   [${i}] ✅ EXACT MATCH FOUND! Clicking checkbox: "${label || dataValue}"`);
+            Logger.info(`✅ EXACT MATCH [${i}] - Checking Google Forms checkbox: "${label || dataValue}" for value "${value}"`);
+
             checkbox.setAttribute("aria-checked", "true");
             checkbox.click();
 
@@ -1336,15 +1495,66 @@ class FieldFiller {
             if (hiddenInput) {
               hiddenInput.checked = true;
               hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+              console.log(`🔥   [${i}] ↳ Hidden input updated`);
+            } else {
+              console.log(`🔥   [${i}] ↳ No hidden input found`);
             }
 
             successCount++;
-            Logger.info(`✅ Checked Google Forms checkbox: "${label || dataValue}"`);
-            break;
+            matchedForThisValue = true;
+            exactMatchFound = true;
+            break; // Stop after finding exact match
+          } else {
+            console.log(`🔥   [${i}] ❌ No match: "${targetValue}" ≠ "${labelValue}" and ≠ "${dataValueLower}"`);
           }
+        }
+
+        // Phase 2: If no exact match found, try equivalences
+        if (!exactMatchFound) {
+          Logger.debug(`  🔄 Phase 2 - No exact match found, trying equivalences for "${targetValue}"`);
+
+          for (const checkbox of checkboxes) {
+            const label = this.getGoogleFormsLabel(checkbox);
+            const dataValue = checkbox.getAttribute("data-value");
+
+            if (!label && !dataValue) continue;
+
+            const labelValue = label ? label.toLowerCase().trim() : "";
+            const dataValueLower = dataValue ? dataValue.toLowerCase().trim() : "";
+
+            Logger.debug(`  📋 Phase 2 - Checking equivalence: label="${labelValue}", data-value="${dataValueLower}"`);
+
+            // Check equivalences (but not exact matches, already done)
+            if (
+              (this.isCheckboxValueMatch(targetValue, labelValue) && labelValue !== targetValue) ||
+              (this.isCheckboxValueMatch(targetValue, dataValueLower) && dataValueLower !== targetValue)
+            ) {
+              Logger.info(`✅ EQUIVALENCE MATCH - Checking Google Forms checkbox: "${label || dataValue}" for value "${value}"`);
+
+              checkbox.setAttribute("aria-checked", "true");
+              checkbox.click();
+
+              // Find and trigger hidden input
+              const hiddenInput =
+                checkbox.querySelector('input[type="checkbox"]') || checkbox.parentElement.querySelector('input[type="checkbox"]');
+              if (hiddenInput) {
+                hiddenInput.checked = true;
+                hiddenInput.dispatchEvent(new Event("change", { bubbles: true }));
+              }
+
+              successCount++;
+              matchedForThisValue = true;
+              break; // Stop after finding first equivalence match
+            }
+          }
+        }
+
+        if (!matchedForThisValue) {
+          Logger.debug(`❌ No Google Forms checkbox found for value: "${value}"`);
         }
       });
 
+      Logger.info(`✅ Successfully checked ${successCount}/${valuesToUse.length} Google Forms checkboxes`);
       return successCount > 0;
     } catch (error) {
       Logger.error(`Error setting Google Forms multiple checkbox values: ${error.message}`);
@@ -1477,30 +1687,80 @@ class FieldFiller {
 
       // Determine if this is a "codes" question (CE, CO, EE, EO) or "full names" question
       const isCodesFormat = availableOptions.some((option) => ["ce", "co", "ee", "eo"].includes(option));
-
-      const isFullNamesFormat = availableOptions.some((option) => option.includes("comprehension") || option.includes("expression"));
+      const isFullNamesFormat = availableOptions.some(
+        (option) =>
+          option.includes("compréhension") ||
+          option.includes("comprehension") ||
+          option.includes("expression") ||
+          option.includes("écrite") ||
+          option.includes("orale")
+      );
 
       Logger.debug(`Question format - Codes: ${isCodesFormat}, Full names: ${isFullNamesFormat}`);
 
       // Choose the appropriate value set
       let valuesToUse = [];
+
+      // Try multiple sources for the values
       if (isCodesFormat) {
-        // Use the short codes: CE, CO
-        valuesToUse = USER_PROFILE.choices.examTypes; // ["CE", "CO"]
+        // Try examTypes first, then examSubjects
+        if (USER_PROFILE.choices && USER_PROFILE.choices.examTypes) {
+          valuesToUse = Array.isArray(USER_PROFILE.choices.examTypes)
+            ? USER_PROFILE.choices.examTypes
+            : [USER_PROFILE.choices.examTypes];
+          Logger.debug(`Using short codes from examTypes:`, valuesToUse);
+        } else if (USER_PROFILE.misc && USER_PROFILE.misc.examSubjects) {
+          const examSubjects = Array.isArray(USER_PROFILE.misc.examSubjects)
+            ? USER_PROFILE.misc.examSubjects
+            : [USER_PROFILE.misc.examSubjects];
+          // Convert examSubjects to short codes if needed
+          const codeMapping = {
+            "Compréhension écrite": "CE",
+            "comprehension écrite": "CE",
+            "Compréhension orale": "CO",
+            "comprehension orale": "CO",
+            "Expression écrite": "EE",
+            "expression ecrite": "EE",
+            "Expression orale": "EO",
+            "expression orale": "EO",
+          };
+          valuesToUse = examSubjects.map((subject) => codeMapping[subject] || subject);
+          Logger.debug(`Using short codes from examSubjects:`, valuesToUse);
+        }
       } else if (isFullNamesFormat) {
-        // Use the full names: Comprehension écrite, comprehension orale
-        valuesToUse = USER_PROFILE.choices.examTypesFull; // ["Comprehension écrite", "comprehension orale"]
-      } else {
-        // Fallback to the original values
-        valuesToUse = values;
+        // Try examTypesFull first, then examSubjectsFull, then examSubjects
+        if (USER_PROFILE.choices && USER_PROFILE.choices.examTypesFull) {
+          valuesToUse = Array.isArray(USER_PROFILE.choices.examTypesFull)
+            ? USER_PROFILE.choices.examTypesFull
+            : [USER_PROFILE.choices.examTypesFull];
+          Logger.debug(`Using full names from examTypesFull:`, valuesToUse);
+        } else if (USER_PROFILE.misc && USER_PROFILE.misc.examSubjectsFull) {
+          valuesToUse = Array.isArray(USER_PROFILE.misc.examSubjectsFull)
+            ? USER_PROFILE.misc.examSubjectsFull
+            : [USER_PROFILE.misc.examSubjectsFull];
+          Logger.debug(`Using full names from examSubjectsFull:`, valuesToUse);
+        } else if (USER_PROFILE.misc && USER_PROFILE.misc.examSubjects) {
+          valuesToUse = Array.isArray(USER_PROFILE.misc.examSubjects)
+            ? USER_PROFILE.misc.examSubjects
+            : [USER_PROFILE.misc.examSubjects];
+          Logger.debug(`Using examSubjects directly:`, valuesToUse);
+        }
       }
 
-      Logger.debug(`Using values for matching:`, valuesToUse);
+      // Fallback to provided values if nothing found
+      if (valuesToUse.length === 0) {
+        valuesToUse = Array.isArray(values) ? values : [values];
+        Logger.debug(`Using fallback values:`, valuesToUse);
+      }
 
+      Logger.debug(`Final values to use for matching:`, valuesToUse); // Check each value against all checkboxes
       valuesToUse.forEach((value) => {
         const targetValue = String(value).toLowerCase().trim();
+        let matchedForThisValue = false;
 
         for (const checkbox of checkboxes) {
+          // REMOVED: if (matchedForThisValue) break; // Allow multiple matches per value
+
           const label = this.getCheckboxLabel(checkbox);
           if (!label) continue;
 
@@ -1508,6 +1768,8 @@ class FieldFiller {
 
           // Enhanced matching logic
           if (this.isCheckboxValueMatch(targetValue, labelValue)) {
+            Logger.info(`✅ Checking checkbox: "${label}" for value "${value}"`);
+
             checkbox.checked = true;
             checkbox.focus();
 
@@ -1519,12 +1781,16 @@ class FieldFiller {
 
             events.forEach((event) => checkbox.dispatchEvent(event));
             successCount++;
-            Logger.info(`✅ Checked checkbox: "${label}"`);
-            break;
+            matchedForThisValue = true;
           }
+        }
+
+        if (!matchedForThisValue) {
+          Logger.debug(`❌ No checkbox found for value: "${value}"`);
         }
       });
 
+      Logger.info(`✅ Successfully checked ${successCount}/${valuesToUse.length} checkboxes`);
       return successCount > 0;
     } catch (error) {
       Logger.error(`Error setting multiple checkbox values: ${error.message}`);
@@ -1623,42 +1889,70 @@ class FieldFiller {
    * @returns {boolean} Whether they match
    */
   static isCheckboxValueMatch(targetValue, labelValue) {
-    // First try basic matching
-    if (labelValue === targetValue || labelValue.includes(targetValue) || targetValue.includes(labelValue)) {
+    Logger.debug(`🔍 Matching "${targetValue}" with "${labelValue}"`);
+
+    // Normalize function to handle accents and case
+    const normalize = (str) => {
+      return str.toLowerCase().replace(/é/g, "e").replace(/è/g, "e").replace(/ê/g, "e").replace(/à/g, "a").replace(/ç/g, "c").trim();
+    };
+
+    const normalizedTarget = normalize(targetValue);
+    const normalizedLabel = normalize(labelValue);
+
+    // First try normalized exact matching
+    if (normalizedLabel === normalizedTarget) {
+      Logger.debug(`✅ Normalized exact match: "${targetValue}" = "${labelValue}"`);
       return true;
     }
 
-    // Define exam subject equivalences
+    // Define exam subject equivalences (strict mapping with normalized forms)
     const examEquivalences = {
-      ce: ["ce", "comprehension écrite", "comprehension ecrite", "compréhension écrite", "compréhension ecrite"],
-      co: ["co", "comprehension orale", "compréhension orale"],
-      ee: ["ee", "expression écrite", "expression ecrite"],
-      eo: ["eo", "expression orale"],
-      "comprehension écrite": ["ce", "comprehension écrite", "comprehension ecrite", "compréhension écrite", "compréhension ecrite"],
-      "comprehension orale": ["co", "comprehension orale", "compréhension orale"],
-      "expression écrite": ["ee", "expression écrite", "expression ecrite"],
-      "expression orale": ["eo", "expression orale"],
+      ce: ["comprehension ecrite"],
+      co: ["comprehension orale"],
+      ee: ["expression ecrite"],
+      eo: ["expression orale"],
+      "comprehension ecrite": ["ce"],
+      "comprehension orale": ["co"],
+      "expression ecrite": ["ee"],
+      "expression orale": ["eo"],
     };
 
-    // Check exam subject equivalences
-    for (const [key, values] of Object.entries(examEquivalences)) {
-      if (values.includes(targetValue) && values.includes(labelValue)) {
-        return true;
+    // Check exam subject equivalences - using normalized values
+    if (examEquivalences[normalizedTarget]) {
+      for (const equiv of examEquivalences[normalizedTarget]) {
+        if (normalizedLabel === normalize(equiv)) {
+          Logger.debug(`✅ Exam equivalence match: "${targetValue}" → "${equiv}" = "${labelValue}"`);
+          return true;
+        }
       }
     }
 
     // Check for disability matches
     const disabilityEquivalences = {
-      aucun: ["aucun", "aucune", "non", "pas de handicap", "sans handicap"],
-      vision: ["vision", "visuel", "vue", "malvoyant", "aveugle"],
+      aucun: ["aucune", "non", "pas de handicap", "sans handicap"],
+      aucune: ["aucun", "non", "pas de handicap", "sans handicap"],
+      vision: ["visuel", "vue", "malvoyant", "aveugle"],
+      visuel: ["vision", "vue", "malvoyant", "aveugle"],
     };
 
-    for (const [key, values] of Object.entries(disabilityEquivalences)) {
-      if (values.includes(targetValue) && values.includes(labelValue)) {
+    if (disabilityEquivalences[targetValue]) {
+      for (const equiv of disabilityEquivalences[targetValue]) {
+        if (labelValue === equiv.toLowerCase()) {
+          Logger.debug(`✅ Disability equivalence match: "${targetValue}" → "${equiv}" = "${labelValue}"`);
+          return true;
+        }
+      }
+    }
+
+    // Check for partial matches only for longer text (avoid false positives with short codes)
+    if (targetValue.length > 3 && labelValue.length > 3) {
+      if (labelValue.includes(targetValue) || targetValue.includes(labelValue)) {
+        Logger.debug(`✅ Partial match found: "${targetValue}" ↔ "${labelValue}"`);
         return true;
       }
     }
 
+    Logger.debug(`❌ No match found for "${targetValue}" with "${labelValue}"`);
     return false;
   }
 }

@@ -11,6 +11,13 @@
 
   "host_permissions": ["https://docs.google.com/forms/*"],
 
+  "web_accessible_resources": [
+    {
+      "resources": ["data/profiles.csv"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
   "background": {
     "service_worker": "background.js"
   },

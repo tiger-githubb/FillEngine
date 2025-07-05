@@ -328,6 +328,93 @@
       .hidden {
         display: none !important;
       }
+
+      /* Mode Switcher */
+      .mode-switcher {
+        display: flex;
+        background: #f1f5f9;
+        border-radius: 6px;
+        padding: 4px;
+        margin-bottom: 20px;
+      }
+
+      .mode-button {
+        flex: 1;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        font-size: 13px;
+        font-weight: 500;
+        color: #64748b;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .mode-button.active {
+        background: white;
+        color: #667eea;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .mode-button:hover:not(.active) {
+        color: #374151;
+      }
+
+      /* Profile Selection Section */
+      .profile-section {
+        margin-bottom: 20px;
+        padding: 16px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+      }
+
+      .profile-label {
+        display: block;
+        font-size: 14px;
+        font-weight: 500;
+        color: #374151;
+        margin-bottom: 8px;
+      }
+
+      .profile-select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 4px;
+        background: white;
+        font-size: 13px;
+        color: #374151;
+        cursor: pointer;
+        transition: border-color 0.2s ease;
+      }
+
+      .profile-select:hover {
+        border-color: #667eea;
+      }
+
+      .profile-select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+      }
+
+      .profile-option {
+        padding: 8px 0;
+      }
+
+      /* Profile Preview */
+      .profile-preview {
+        background: #f0f9f0;
+        border: 1px solid #c8e6c8;
+        border-radius: 4px;
+        padding: 8px 12px;
+        margin-top: 8px;
+        font-size: 12px;
+        color: #2d5a2d;
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -340,8 +427,23 @@
 
       <!-- Content -->
       <div class="content">
+        <!-- Mode Switcher -->
+        <div class="mode-switcher">
+          <button id="profileModeBtn" class="mode-button active">👤 Profils</button>
+          <button id="csvModeBtn" class="mode-button">📁 CSV Upload</button>
+        </div>
+
+        <!-- Profile Selection Section -->
+        <div id="profileSection" class="profile-section">
+          <label for="profileSelect" class="profile-label">Sélectionner un profil :</label>
+          <select id="profileSelect" class="profile-select">
+            <option value="">-- Choisir un profil --</option>
+          </select>
+          <div id="profilePreview" class="profile-preview"></div>
+        </div>
+
         <!-- CSV Upload Section -->
-        <div class="upload-section">
+        <div id="csvSection" class="upload-section hidden">
           <label for="csvFileInput" class="file-label"> 📁 Charger données CSV </label>
           <input type="file" id="csvFileInput" accept=".csv" class="file-input" />
           <div class="file-status" id="fileStatus"></div>
