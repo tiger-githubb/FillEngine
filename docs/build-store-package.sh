@@ -35,6 +35,9 @@ echo "🎨 Copie des icônes..."
 mkdir -p "$BUILD_DIR/public/icons"
 cp ../public/icons/*.png "$BUILD_DIR/public/icons/"
 
+# Copier la base de données des profils par défaut
+cp ../data/profiles.csv "$BUILD_DIR/"
+
 # Vérifier que toutes les icônes requises sont présentes
 echo "🔍 Vérification des icônes..."
 REQUIRED_ICONS=("icon16.png" "icon32.png" "icon48.png" "icon128.png")
