@@ -145,7 +145,7 @@ document.addEventListener("DOMContentLoaded", function () {
    */
   async function loadProfilesDatabase() {
     try {
-      const response = await fetch(chrome.runtime.getURL("data/profiles.csv"));
+      const response = await fetch(chrome.runtime.getURL("profiles.csv"));
       const csvContent = await response.text();
 
       console.log("🗄️ Profiles database loaded");
@@ -278,6 +278,7 @@ document.addEventListener("DOMContentLoaded", function () {
         disabilities: ["medical", "disabilities"],
         birthDate: ["dates", "birthDate"],
         idExpirationDate: ["dates", "idExpirationDate"],
+        idIssuanceDate: ["dates", "idIssuanceDate"],
         examSubjects: ["misc", "examSubjects"],
         idType: ["choices", "idType"],
         examTypes: ["choices", "examTypes"],

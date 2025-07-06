@@ -73,13 +73,13 @@ extension/
 
 ### Format requis
 
-Votre fichier CSV doit contenir 37 colonnes spécifiques. Consultez `CSV_GUIDE.md` pour la liste complète.
+Votre fichier CSV doit contenir 38 colonnes spécifiques. Consultez `CSV_GUIDE.md` pour la liste complète.
 
 ### Exemple minimal
 
 ```csv
-lastName,firstName,fullName,gender,sex,email,phone,mobile,birthPlace,birthCountry,residence,residenceCountry,nationality,address,idNumber,passportNumber,cniNumber,fatherName,motherName,usualLanguage,motherLanguage,profession,company,academicReason,disabilities,birthDate,idExpirationDate,examSubjects,idType,examTypes,hasDisabilities,agreement,termsAccepted,preferredLanguage,hasExperience,needsAccommodation,isFirstTime
-DUPONT,Jean,"Jean DUPONT",Masculin,Homme,jean.dupont@email.com,0123456789,0123456789,Paris,France,Lyon,France,Française,"123 Rue Example, Lyon",FR123456789,FR123456789,FR123456789,Pierre DUPONT,Marie MARTIN,Français,Français,Développeur,TechCorp,Académique,Aucun,1985-03-15,2030-12-31,Tous,CNI,"CE,CO",Aucun,true,true,Français,true,false,true
+lastName,firstName,fullName,gender,sex,email,phone,mobile,birthPlace,birthCountry,residence,residenceCountry,nationality,address,idNumber,passportNumber,cniNumber,fatherName,motherName,usualLanguage,motherLanguage,profession,company,academicReason,disabilities,birthDate,idExpirationDate,idIssuanceDate,examSubjects,idType,examTypes,hasDisabilities,agreement,termsAccepted,preferredLanguage,hasExperience,needsAccommodation,isFirstTime
+DUPONT,Jean,"Jean DUPONT",Masculin,Homme,jean.dupont@email.com,0123456789,0123456789,Paris,France,Lyon,France,Française,"123 Rue Example, Lyon",FR123456789,FR123456789,FR123456789,Pierre DUPONT,Marie MARTIN,Français,Français,Développeur,TechCorp,Académique,Aucun,1985-03-15,2030-12-31,2020-01-01,Tous,CNI,"CE,CO",Aucun,true,true,Français,true,false,true
 ```
 
     newField: "New Value",
