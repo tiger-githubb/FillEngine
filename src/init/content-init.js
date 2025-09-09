@@ -113,81 +113,6 @@ window.addEventListener('unhandledrejection', function(event) {
 	}
 }, true); // Use capture phase to catch rejections early
 
-// Function to find and report "ajouter un fichier" buttons
-function findAjouterFichierButtons() {
-	console.log('🔍 [AutoFill] Searching for "ajouter un fichier" buttons...');
-	
-	// Selectors for file upload buttons
-	const selectors = [
-		'div[role="button"][aria-label*="Ajouter un fichier"]',
-		'div[role="button"][aria-label*="ajouter un fichier"]',
-		'button[aria-label*="Ajouter un fichier"]',
-		'button[aria-label*="ajouter un fichier"]',
-		'div[role="button"][aria-label*="Add file"]',
-		'button[aria-label*="Add file"]',
-		'[aria-label*="Ajouter un fichier"]',
-		'[aria-label*="Add file"]'
-	];
-	
-	let totalFound = 0;
-	
-	selectors.forEach((selector, index) => {
-		try {
-			const elements = document.querySelectorAll(selector);
-			console.log(`📎 Selector ${index + 1}: "${selector}" - Found ${elements.length} elements`);
-			
-			elements.forEach((element, elemIndex) => {
-				const ariaLabel = element.getAttribute('aria-label');
-				const tagName = element.tagName.toLowerCase();
-				const role = element.getAttribute('role');
-				const isVisible = element.offsetWidth > 0 && element.offsetHeight > 0;
-				
-				console.log(`  📌 Element ${elemIndex + 1}:`, {
-					tagName: tagName,
-					role: role,
-					ariaLabel: ariaLabel,
-					isVisible: isVisible,
-					classes: element.className,
-					boundingRect: element.getBoundingClientRect()
-				});
-				
-				// Find the question container
-				const container = element.closest('[role="listitem"], .freebirdFormviewerViewItemsItemItem, .m2, .geS5n');
-				if (container) {
-					const questionText = container.querySelector('[role="heading"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle');
-					if (questionText) {
-						console.log(`    📝 Question: "${questionText.textContent.trim()}"`);
-					}
-				}
-				
-				totalFound++;
-			});
-		} catch (error) {
-			console.error(`❌ Error with selector "${selector}":`, error);
-		}
-	});
-	
-	console.log(`📊 [AutoFill] Total "ajouter un fichier" buttons found: ${totalFound}`);
-	
-	// Also check for file input elements
-	const fileInputs = document.querySelectorAll('input[type="file"]');
-	console.log(`📁 [AutoFill] Regular file inputs found: ${fileInputs.length}`);
-	fileInputs.forEach((input, index) => {
-		console.log(`  📂 File input ${index + 1}:`, {
-			id: input.id,
-			name: input.name,
-			accept: input.accept,
-			multiple: input.multiple,
-			isVisible: input.offsetWidth > 0 && input.offsetHeight > 0
-		});
-	});
-	
-	return totalFound;
-}
-
-// Expose function globally for easy testing
-window.findAjouterFichierButtons = findAjouterFichierButtons;
-
 // Detect page type and initialize autofiller
 console.log("[AutoFill] Content init script loaded");
 // Ensure Logger binding exists even if Logger.js didn't load for any reason
@@ -235,11 +160,6 @@ try {
 		Logger.debug("Available field mappings:", autoFiller.getFieldMappings());
 	}
 	Logger.info("Extension ready. Upload CSV data to begin form filling.");
-	
-	// Search for "ajouter un fichier" buttons and report in console
-	setTimeout(() => {
-		findAjouterFichierButtons();
-	}, 2000); // Wait 2 seconds for page to fully load
 	
 } catch (e) {
 	console.error("[AutoFill] Logger not available:", e);

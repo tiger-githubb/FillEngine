@@ -237,13 +237,11 @@ class FormAutoFiller {
 		Logger.info("Form filling completed, now processing file upload fields...");
 		await this.processFileUploadFields();
 
-		// After form filling and file processing, automatically click first "Ajouter un fichier" button
-		Logger.info("Form processing completed, now clicking first 'Ajouter un fichier' button...");
-		const buttonClickResult = await this.clickFirstAjouterFichierButton();
+		// Note: Automatic clicking of "Ajouter un fichier" button has been removed
 
 		return {
 			success: true,
-			message: `Analysé ${this.statistics.fieldsDetected} questions - Rempli ${this.statistics.fieldsFilled} champs (${overallSuccessRate}%) - Puis traité ${this.statistics.fileUploadProcessed} fichiers upload - ${buttonClickResult.success ? 'Cliqué bouton "Ajouter un fichier"' : 'Aucun bouton "Ajouter un fichier" cliqué'}`,
+			message: `Analysé ${this.statistics.fieldsDetected} questions - Rempli ${this.statistics.fieldsFilled} champs (${overallSuccessRate}%) - Puis traité ${this.statistics.fileUploadProcessed} fichiers upload`,
 			fieldsDetected: this.statistics.fieldsDetected,
 			fieldsFilled: this.statistics.fieldsFilled,
 			supportedFields: supportedFields,
@@ -255,7 +253,7 @@ class FormAutoFiller {
 			fileUploadFields: this.statistics.fileUploadFields,
 			fileUploadProcessed: this.statistics.fileUploadProcessed,
 			fileUploadErrors: this.statistics.fileUploadErrors,
-			buttonClickResult: buttonClickResult
+
 		};
 	}
 
@@ -566,127 +564,6 @@ class FormAutoFiller {
 				processed: this.statistics.fileUploadProcessed,
 				total: this.statistics.fileUploadFields,
 				errors: this.statistics.fileUploadErrors
-			};
-		}
-	}
-
-	/**
-	 * Automatically click the first "Ajouter un fichier" button found on the page
-	 * @returns {Promise<Object>} Click result object
-	 */
-	async clickFirstAjouterFichierButton() {
-		try {
-			Logger.info("Searching for 'Ajouter un fichier' buttons to click...");
-			
-			// Use the same selectors from CONFIG
-			const selectors = [
-				'div[role="button"][aria-label*="Ajouter un fichier"]',
-				'div[role="button"][aria-label*="ajouter un fichier"]',
-				'button[aria-label*="Ajouter un fichier"]',
-				'button[aria-label*="ajouter un fichier"]',
-				'div[role="button"][aria-label*="Add file"]',
-				'button[aria-label*="Add file"]',
-				'[aria-label*="Ajouter un fichier"]',
-				'[aria-label*="Add file"]'
-			];
-			
-			let totalFound = 0;
-			let clickedButton = null;
-			
-			for (const selector of selectors) {
-				try {
-					const elements = document.querySelectorAll(selector);
-					Logger.debug(`Selector "${selector}" found ${elements.length} elements`);
-					
-					for (const element of elements) {
-						const ariaLabel = element.getAttribute('aria-label');
-						const isVisible = element.offsetWidth > 0 && element.offsetHeight > 0;
-						
-						Logger.debug(`Found button:`, {
-							tagName: element.tagName.toLowerCase(),
-							role: element.getAttribute('role'),
-							ariaLabel: ariaLabel,
-							isVisible: isVisible,
-							classes: element.className
-						});
-						
-						totalFound++;
-						
-						// Click the first visible button we find
-						if (!clickedButton && isVisible) {
-							try {
-								Logger.info(`Clicking first "Ajouter un fichier" button: ${ariaLabel}`);
-								
-								// Find the question container for context
-								const container = element.closest('[role="listitem"], .freebirdFormviewerViewItemsItemItem, .m2, .geS5n');
-								if (container) {
-									const questionText = container.querySelector('[role="heading"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle');
-									if (questionText) {
-										Logger.info(`Question context: "${questionText.textContent.trim()}"`);  
-									}
-								}
-								
-								// Perform the click with multiple event types for maximum compatibility
-								element.focus();
-								element.click();
-								
-								// Dispatch mouse events for better compatibility
-								const mouseEvents = ['mousedown', 'mouseup', 'click'];
-								mouseEvents.forEach(eventType => {
-									try {
-										element.dispatchEvent(new MouseEvent(eventType, { 
-											bubbles: true, 
-											cancelable: true,
-											view: window
-										}));
-									} catch (eventError) {
-										Logger.debug(`Failed to dispatch ${eventType} event:`, eventError.message);
-									}
-								});
-								
-								clickedButton = {
-									element: element,
-									ariaLabel: ariaLabel,
-									selector: selector
-								};
-								
-								Logger.info(`✅ Successfully clicked "Ajouter un fichier" button`);
-								break;
-								
-							} catch (clickError) {
-								Logger.error(`Failed to click button: ${clickError.message}`);
-							}
-						}
-					}
-					
-					// If we found and clicked a button, stop searching
-					if (clickedButton) {
-						break;
-					}
-					
-				} catch (selectorError) {
-					Logger.error(`Error with selector "${selector}": ${selectorError.message}`);
-				}
-			}
-			
-			Logger.info(`Button search complete: ${totalFound} total buttons found, ${clickedButton ? 'clicked first one' : 'none clicked'}`);
-			
-			return {
-				success: !!clickedButton,
-				totalFound: totalFound,
-				clickedButton: clickedButton,
-				message: clickedButton ? 
-					`Successfully clicked first "Ajouter un fichier" button: ${clickedButton.ariaLabel}` : 
-					`Found ${totalFound} "Ajouter un fichier" buttons but none were clickable`
-			};
-			
-		} catch (error) {
-			Logger.error('Error in clickFirstAjouterFichierButton:', error);
-			return {
-				success: false,
-				error: error.message,
-				totalFound: 0,
-				clickedButton: null
 			};
 		}
 	}

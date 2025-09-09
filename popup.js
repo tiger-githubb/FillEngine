@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const userProfileDisplay = document.getElementById("userProfileDisplay");
   const profileName = document.getElementById("profileName");
   const profileDetails = document.getElementById("profileDetails");
+  const profileId = document.getElementById("profileId");
 
   // New DOM Elements for profiles
   const profileModeBtn = document.getElementById("profileModeBtn");
@@ -39,6 +40,30 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Current user data (will be updated when CSV is loaded or profile selected)
   let currentUserData = null;
+  
+  // Variables d'optimisation
+  let resultUpdateTimer = null;
+  let isUpdatingResults = false;
+
+  /**
+   * Debounced update function pour éviter les mises à jour trop fréquentes
+   * @param {Array} results - Array of field fill results
+   */
+  function updateResultsDebounced(results) {
+    if (isUpdatingResults) return;
+    
+    // Annuler le timer précédent
+    if (resultUpdateTimer) {
+      cancelAnimationFrame(resultUpdateTimer);
+    }
+    
+    resultUpdateTimer = requestAnimationFrame(() => {
+      isUpdatingResults = true;
+      updateStats(results);
+      showResults(results);
+      isUpdatingResults = false;
+    });
+  }
   let currentMode = "profiles"; // "profiles" or "csv"
   let availableProfiles = [];
 
@@ -524,6 +549,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
     profileName.textContent = name;
 
+    // Display profile ID if available
+    if (userData.id) {
+      profileId.textContent = `ID: ${userData.id}`;
+      profileId.style.display = "inline-block";
+    } else {
+      profileId.style.display = "none";
+    }
+
     let details = [];
     if (email) details.push(`📧 ${email}`);
     if (profession) details.push(`💼 ${profession}`);
@@ -856,30 +889,31 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log("Results:", response.results);
 
         // Update UI with results - note: response.results should be the stats object
-        if (response.results && response.results.detectionResults) {
-          updateStats(response.results.detectionResults);
-          showResults(response.results.detectionResults);
-        } else if (Array.isArray(response.results)) {
-          updateStats(response.results);
-          showResults(response.results);
-        }
-
-        const filledCount = Array.isArray(response.results)
-          ? response.results.filter((r) => r.matched).length
-          : response.results.fieldsFilled || 0;
-
-        // Create success message including button click information
-        let successMessage = `Formulaire rempli avec succès! ${filledCount} champs remplis`;
+        let resultsData = null;
+        let filledCount = 0;
         
-        // Add button click information if available
-        if (response.results && response.results.buttonClickResult) {
-          const buttonResult = response.results.buttonClickResult;
-          if (buttonResult.success) {
-            successMessage += ` - Bouton "Ajouter un fichier" cliqué automatiquement ✓`;
-          } else if (buttonResult.totalFound > 0) {
-            successMessage += ` - ${buttonResult.totalFound} bouton(s) "Ajouter un fichier" trouvé(s) mais non cliqué(s)`;
-          }
+        if (response.results && response.results.detectionResults) {
+          resultsData = response.results.detectionResults;
+        } else if (Array.isArray(response.results)) {
+          resultsData = response.results;
         }
+        
+        if (resultsData) {
+          // Optimisation: traitement avec debouncing
+          updateResultsDebounced(resultsData);
+          
+          // Calculer filledCount en une seule passe
+          for (let i = 0; i < resultsData.length; i++) {
+            if (resultsData[i].matched) {
+              filledCount++;
+            }
+          }
+        } else {
+          filledCount = response.results.fieldsFilled || 0;
+        }
+
+        // Create success message
+        let successMessage = `Formulaire rempli avec succès! ${filledCount} champs remplis`;
 
         showStatus(successMessage, "success");
       } else {
@@ -902,9 +936,19 @@ document.addEventListener("DOMContentLoaded", function () {
    */
   function updateStats(results) {
     const totalFields = results.length;
-    const unfilledFields = results.filter((result) => !result.matched).length;
-    const filledFields = results.filter((result) => result.matched).length;
+    let unfilledFields = 0;
+    let filledFields = 0;
+    
+    // Optimisation: une seule itération au lieu de 3 filter()
+    for (let i = 0; i < totalFields; i++) {
+      if (results[i].matched) {
+        filledFields++;
+      } else {
+        unfilledFields++;
+      }
+    }
 
+    // Mise à jour en batch pour éviter les reflows multiples
     fieldsDetectedSpan.textContent = totalFields;
     fieldsUnfilledSpan.textContent = unfilledFields;
     fieldsFilledSpan.textContent = filledFields;
@@ -913,43 +957,77 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   /**
-   * Show detailed results
+   * Show detailed results with virtualization for large datasets
    * @param {Array} results - Array of field fill results
    */
   function showResults(results) {
-    resultsDiv.innerHTML = "";
-
-    const unfilledResults = results.filter((result) => !result.matched);
-
-    // Header: Champ | Type
+    // Optimisation: utiliser DocumentFragment pour éviter les reflows
+    const fragment = document.createDocumentFragment();
+    
+    // Header: Type seulement
     const header = document.createElement("div");
     header.className = "results-header";
-    header.innerHTML = `<div>Champ</div><div>Type</div>`;
-    resultsDiv.appendChild(header);
+    header.innerHTML = `<div>Type de champ</div>`;
+    fragment.appendChild(header);
+
+    // Filtrer et traiter en une seule passe
+    const unfilledResults = [];
+    for (let i = 0; i < results.length; i++) {
+      if (!results[i].matched) {
+        unfilledResults.push(results[i]);
+      }
+    }
+
+    // Virtualisation pour les grandes listes (>20 éléments)
+    const maxDisplayItems = 20;
+    const itemsToShow = unfilledResults.length > maxDisplayItems 
+      ? unfilledResults.slice(0, maxDisplayItems) 
+      : unfilledResults;
 
     // Only show unfilled fields
-    if (unfilledResults.length > 0) {
-      unfilledResults.forEach((result) => {
+    if (itemsToShow.length > 0) {
+      for (let i = 0; i < itemsToShow.length; i++) {
+        const result = itemsToShow[i];
         const item = document.createElement("div");
         item.className = "result-item error";
-        const question = result.questionLabel || result.field || "(inconnu)";
-        const type = result.fieldCategory || result.inputType || "-";
-        item.innerHTML = `
-          <div class="result-text">${question}</div>
-          <div class="result-text">${type}</div>
-        `;
-        resultsDiv.appendChild(item);
-      });
+        const type = result.fieldCategory || result.inputType || "Champ inconnu";
+        
+        // Optimisation: créer l'élément directement
+        const typeDiv = document.createElement("div");
+        typeDiv.className = "result-text";
+        typeDiv.textContent = type;
+        
+        item.appendChild(typeDiv);
+        fragment.appendChild(item);
+      }
+      
+      // Afficher info de troncature si nécessaire
+      if (unfilledResults.length > maxDisplayItems) {
+        const moreItem = document.createElement("div");
+        moreItem.className = "result-item info";
+        
+        const moreDiv = document.createElement("div");
+        moreDiv.className = "result-text";
+        moreDiv.textContent = `... et ${unfilledResults.length - maxDisplayItems} autres champs`;
+        
+        moreItem.appendChild(moreDiv);
+        fragment.appendChild(moreItem);
+      }
     } else {
       const item = document.createElement("div");
       item.className = "result-item success";
-      item.innerHTML = `
-        <div class="result-text">Tous les champs supportés</div>
-        <div class="result-text">-</div>
-      `;
-      resultsDiv.appendChild(item);
+      
+      const successDiv = document.createElement("div");
+      successDiv.className = "result-text";
+      successDiv.textContent = "Tous les champs supportés";
+      
+      item.appendChild(successDiv);
+      fragment.appendChild(item);
     }
 
+    // Une seule manipulation DOM
+    resultsDiv.innerHTML = "";
+    resultsDiv.appendChild(fragment);
     resultsDiv.style.display = "block";
   }
 
