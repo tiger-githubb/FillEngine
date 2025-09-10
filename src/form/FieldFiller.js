@@ -76,9 +76,25 @@ class FieldFiller {
 			};
 
 			try {
-				// Completely disable ALL external interference
-				window.onerror = function() { return true; }; // Block ALL errors
-				window.onunhandledrejection = function(event) { event.preventDefault(); }; // Block ALL rejections
+				// Ultra-aggressive error suppression for contentScript.js and sentence errors
+				window.onerror = function(message, source, lineno, colno, error) {
+					if (source && (source.includes('contentScript.js') || source.includes('content-script'))) {
+						return true; // Suppress contentScript errors completely
+					}
+					if (message && (message.includes('sentence') || message.includes('Cannot read properties of undefined'))) {
+						return true; // Suppress sentence-related errors completely
+					}
+					return true; // Block ALL errors during field operations
+				};
+				
+				window.onunhandledrejection = function(event) {
+					const reason = event.reason;
+					if (reason && (reason.stack?.includes('contentScript.js') || reason.message?.includes('sentence'))) {
+						event.preventDefault();
+						return;
+					}
+					event.preventDefault(); // Block ALL promise rejections during field operations
+				};
 				
 				// Disable event listeners temporarily
 				EventTarget.prototype.addEventListener = function() { return; };
@@ -125,14 +141,22 @@ class FieldFiller {
 					}
 				];
 
-				// Try each strategy
+				// Try each strategy with ultra-aggressive error suppression
 				for (let i = 0; i < setValueStrategies.length; i++) {
 					try {
 						setValueStrategies[i]();
 						success = true;
 						break;
 					} catch (strategyError) {
-						// Silently continue to next strategy
+						// Ultra-aggressive suppression - check for sentence/contentScript errors
+						if (strategyError.message && 
+							(strategyError.message.includes('sentence') || 
+							 strategyError.message.includes('contentScript') ||
+							 strategyError.message.includes('Cannot read properties of undefined'))) {
+							// These are external script errors - continue silently
+							continue;
+						}
+						// Silently continue to next strategy for any other errors
 						continue;
 					}
 				}
@@ -143,7 +167,7 @@ class FieldFiller {
 						field.focus();
 					}
 				} catch (focusError) {
-					// Ignore focus errors
+					// Ignore focus errors completely
 				}
 
 				// Safe event dispatching (minimal events only)
@@ -160,18 +184,41 @@ class FieldFiller {
 						try {
 							field.dispatchEvent(event);
 						} catch (eventError) {
-							// Ignore event errors
+							// Ultra-aggressive suppression for event errors
+							if (eventError.message && 
+								(eventError.message.includes('sentence') || 
+								 eventError.message.includes('contentScript') ||
+								 eventError.message.includes('Cannot read properties of undefined'))) {
+								// These are external script errors - ignore completely
+								return;
+							}
+							// Ignore all other event errors too
 						}
 					});
 					
 					// Block dispatchEvent again
 					EventTarget.prototype.dispatchEvent = function() { return true; };
 				} catch (eventError) {
-					// Ignore all event errors
+					// Ignore all event errors completely
 				}
 
 				return success;
 
+			} catch (outerError) {
+				// Ultra-aggressive catch for any outer errors
+				if (outerError.message && 
+					(outerError.message.includes('sentence') || 
+					 outerError.message.includes('contentScript') ||
+					 outerError.message.includes('Cannot read properties of undefined'))) {
+					// These are external script errors - return minimal success
+					try {
+						field.value = String(value);
+						return true;
+					} catch (fallbackError) {
+						return false;
+					}
+				}
+				return false;
 			} finally {
 				// ALWAYS restore all original methods
 				try {

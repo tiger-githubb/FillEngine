@@ -219,22 +219,39 @@ class FormDetector {
 	 */
 	static detectFileUploadField(container) {
 		try {
-			// Check for file upload selectors from config
-			for (const selector of CONFIG.fileUploadSelectors) {
-				const uploadElement = container.querySelector(selector);
-				if (uploadElement && this.isElementVisible(uploadElement)) {
-					// Mark as file upload type for later processing
-					uploadElement.dataset.fieldType = 'fileupload';
+			Logger.debug('Checking container for file upload fields:', container);
+			
+			// Simple approach: look for any element containing "Ajouter un fichier" text
+			const allElements = container.querySelectorAll('*');
+			for (const element of allElements) {
+				if (element.textContent && element.textContent.includes('Ajouter un fichier')) {
+					Logger.debug(`Found element with "Ajouter un fichier" text:`, element);
 					
-					// Determine expected file type based on context
-					const questionText = this.extractQuestionLabel(container);
-					const expectedType = this.determineExpectedFileType(questionText, container);
-					uploadElement.dataset.expectedFileType = expectedType;
+					// Check if this element or its parent is clickable (role="button" or similar)
+					let clickableElement = element;
+					if (element.getAttribute('role') !== 'button') {
+						// Look for parent with role="button"
+						clickableElement = element.closest('[role="button"]') || element;
+					}
 					
-					Logger.debug(`Found file upload field: ${questionText} (expected: ${expectedType})`);
-					return uploadElement;
+					if (this.isElementVisible(clickableElement)) {
+						// Mark as file upload type for later processing
+						clickableElement.dataset.fieldType = 'fileupload';
+						
+						// Determine expected file type based on context
+						const questionText = this.extractQuestionLabel(container);
+						const expectedType = this.determineExpectedFileType(questionText, container);
+						clickableElement.dataset.expectedFileType = expectedType;
+						
+						Logger.debug(`Found file upload field: ${questionText} (expected: ${expectedType})`);
+						return clickableElement;
+					} else {
+						Logger.debug('Element with "Ajouter un fichier" found but not visible');
+					}
 				}
 			}
+			
+			Logger.debug('No "Ajouter un fichier" text found in container');
 			return null;
 		} catch (error) {
 			Logger.error('Error detecting file upload field:', error);
@@ -274,6 +291,16 @@ class FormDetector {
 		// Check for PDF/document indicators
 		const pdfKeywords = CONFIG.fileTypeMapping.pdf;
 		if (pdfKeywords.some(keyword => text.includes(keyword))) {
+			return 'pdf';
+		}
+		
+		// Check for specific document types from French text
+		if (text.includes('cni') || text.includes('passeport') || text.includes('passport') || 
+			text.includes('identité') || text.includes('identification')) {
+			return 'document';
+		}
+		
+		if (text.includes('cv') || text.includes('curriculum')) {
 			return 'pdf';
 		}
 

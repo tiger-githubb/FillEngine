@@ -6,15 +6,17 @@ const CONFIG = {
 	containerSelectors: [
 		'[data-params*="question"]',
 		'[role="listitem"]',
+		'.Qr7Oae[role="listitem"]', // Google Forms question container
+		'.geS5n', // Google Forms question wrapper
 		".m2",
 		".freebirdFormviewerViewItemsItemItem",
 		".Xb9hP",
-		".geS5n",
 		".AgroKb",
 	],
 	questionTextSelectors: [
 		'[role="heading"]',
-		".M7eMe",
+		'.M7eMe', // Google Forms question text
+		'.HoXoMd[role="heading"]', // Google Forms heading with role
 		".freebirdFormviewerViewItemsItemItemTitle",
 		".AgroKb .M7eMe",
 		'span[dir="auto"]',
@@ -46,19 +48,14 @@ const CONFIG = {
 		"reset",
 	],
 	skipKeywords: ["sélectionn", "choisir"],
-	// File upload configuration
+	// File upload configuration  
 	fileUploadSelectors: [
-		'div[role="button"][aria-label*="Ajouter un fichier"]',
-		'div[role="button"][aria-label*="Add file"]',
-		'button[aria-label*="Ajouter un fichier"]',
-		'button[aria-label*="Add file"]',
-		'.freebirdFormviewerViewItemsFileUploadButton',
-		'[data-value="Upload file"]',
-		'input[type="file"]'
+		// Will be handled by custom text-based detection in FormDetector
 	],
 	fileTypeMapping: {
-		photo: ['image', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'],
-		pdf: ['pdf', 'document']
+		photo: ['image', 'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'photo'],
+		pdf: ['pdf', 'document', 'cv', 'curriculum'],
+		document: ['cni', 'passeport', 'passport', 'identité', 'identification', 'piece']
 	},
 	fileUploadModalSelectors: {
 		modal: 'iframe[src*="picker"], dialog[role="dialog"], .picker-dialog',

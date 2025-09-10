@@ -45,6 +45,155 @@ function injectHighlightStyles() {
 // Inject styles immediately when content script loads
 injectHighlightStyles();
 
+// DEBUG: Add manual test function for file upload detection
+window.testFileUploadDetection = function() {
+	console.log('🧪 Testing file upload detection manually...');
+	console.log('Available selectors:', CONFIG.fileUploadSelectors);
+	
+	const containers = FormDetector.findQuestionContainers();
+	console.log(`Found ${containers.length} containers:`, containers);
+	
+	containers.forEach((container, index) => {
+		const questionLabel = FormDetector.extractQuestionLabel(container);
+		const inputField = FormDetector.findInputField(container);
+		const isFileUpload = inputField && inputField.dataset && inputField.dataset.fieldType === 'fileupload';
+		
+		console.log(`Container ${index}:`, {
+			questionLabel,
+			inputField,
+			isFileUpload,
+			fieldType: inputField?.dataset?.fieldType,
+			container
+		});
+		
+		// Check each selector manually
+		CONFIG.fileUploadSelectors.forEach((selector, selectorIndex) => {
+			const element = container.querySelector(selector);
+			if (element) {
+				console.log(`  ✅ Selector ${selectorIndex + 1} ("${selector}") found element:`, element);
+				const isVisible = FormDetector.isElementVisible(element);
+				console.log(`  Visible: ${isVisible}`);
+			} else {
+				console.log(`  ❌ Selector ${selectorIndex + 1} ("${selector}") found nothing`);
+			}
+		});
+		
+		if (isFileUpload) {
+			console.log('🎯 File upload field detected!', {
+				question: questionLabel,
+				element: inputField,
+				expectedType: inputField.dataset.expectedFileType
+			});
+		}
+	});
+	
+	// Also test the direct detection method
+	if (autoFiller && autoFiller.detectFileUploadFieldsDirectly) {
+		console.log('⚙️ Testing direct file upload detection...');
+		const directResults = autoFiller.detectFileUploadFieldsDirectly();
+		console.log(`Direct detection found ${directResults.length} file upload fields:`, directResults);
+	}
+	
+	return { containers, total: containers.length };
+};
+
+// DEBUG: Simple test for "Ajouter un fichier" detection
+window.testSimpleFileUploadDetection = function() {
+	console.log('🔍 Simple test: Looking for "Ajouter un fichier" in div[role="listitem"]...');
+	
+	// Find all div[role="listitem"] containers
+	const containers = document.querySelectorAll('div[role="listitem"]');
+	console.log(`Found ${containers.length} div[role="listitem"] containers`);
+	
+	containers.forEach((container, index) => {
+		console.log(`\nContainer ${index + 1}:`);
+		console.log('  Container:', container);
+		
+		// Check if container contains "Ajouter un fichier" text
+		const hasAjouterText = container.textContent.includes('Ajouter un fichier');
+		console.log(`  Contains "Ajouter un fichier": ${hasAjouterText}`);
+		
+		if (hasAjouterText) {
+			// Find the exact element with the text
+			const allElements = container.querySelectorAll('*');
+			for (const element of allElements) {
+				if (element.textContent && element.textContent.includes('Ajouter un fichier')) {
+					console.log('  ✅ Found element with text:', element);
+					console.log('    Element tag:', element.tagName);
+					console.log('    Element role:', element.getAttribute('role'));
+					console.log('    Element class:', element.className);
+					console.log('    Element visible:', FormDetector.isElementVisible(element));
+					
+					// Check if parent has role="button"
+					const buttonParent = element.closest('[role="button"]');
+					if (buttonParent) {
+						console.log('    Button parent found:', buttonParent);
+						console.log('    Button visible:', FormDetector.isElementVisible(buttonParent));
+					}
+					break;
+				}
+			}
+			
+			// Try to get question label
+			const questionLabel = FormDetector.extractQuestionLabel(container);
+			console.log(`  Question label: "${questionLabel}"`);
+		}
+	});
+	
+	return {
+		totalContainers: containers.length,
+		fileUploadContainers: Array.from(containers).filter(c => c.textContent.includes('Ajouter un fichier')).length
+	};
+};
+
+// DEBUG: Add manual test function for highlighting
+window.testHighlighting = function() {
+	console.log('🧪 Testing highlighting manually...');
+	
+	if (!autoFiller) {
+		console.error('❌ AutoFiller not available');
+		return;
+	}
+	
+	// First, simulate form processing to populate detection results
+	const containers = FormDetector.findQuestionContainers();
+	containers.forEach((container, index) => {
+		const questionLabel = FormDetector.extractQuestionLabel(container);
+		const inputField = FormDetector.findInputField(container);
+		
+		if (questionLabel && inputField) {
+			let fieldCategory = 'other';
+			if (inputField.dataset && inputField.dataset.fieldType === 'fileupload') {
+				fieldCategory = 'fileupload';
+			}
+			
+			// Add to detection results if not already there
+			const existingResult = autoFiller.statistics.detectionResults.find(
+				r => r.questionLabel === questionLabel
+			);
+			
+			if (!existingResult) {
+				autoFiller.statistics.detectionResults.push({
+					questionLabel,
+					matched: false,
+					key: fieldCategory,
+					value: 'Test field',
+					inputType: fieldCategory,
+					fieldCategory: fieldCategory,
+					hasInputField: true
+				});
+				console.log(`Added test result for: ${questionLabel} (${fieldCategory})`);
+			}
+		}
+	});
+	
+	// Now test highlighting
+	const result = autoFiller.highlightUnfilledFields();
+	console.log('Highlighting result:', result);
+	
+	return result;
+};
+
 // Enhanced global error handlers to prevent external script interference
 // Store original handlers before we override them
 const originalWindowError = window.onerror;
@@ -134,8 +283,8 @@ console.log("[AutoFill] Diagnostics:", {
 	hasCONFIG: typeof CONFIG !== "undefined",
 	hasDetect: typeof detectPageTypeAndAdaptConfig,
 	hasFormAutoFiller: typeof FormAutoFiller,
-	hasFileUploadHandler: typeof FileUploadHandler !== "undefined",
-	hasFileUploadModalHandler: typeof FileUploadModalHandler !== "undefined",
+	hasFormDetector: typeof FormDetector !== "undefined",
+	hasFieldFiller: typeof FieldFiller !== "undefined",
 });
 
 let pageType = "unknown";
