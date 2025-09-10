@@ -954,6 +954,20 @@ document.addEventListener("DOMContentLoaded", function () {
     fieldsFilledSpan.textContent = filledFields;
 
     statsDiv.style.display = "block";
+    
+    // Auto-close popup logic based on unfilled fields count
+    console.log(`📊 Unfilled fields count: ${unfilledFields}`);
+    
+    if (unfilledFields === 2) {
+      console.log('🔄 Auto-closing popup immediately (unfilled count = 2)');
+      window.close();
+    } else if (unfilledFields > 2) {
+      console.log(`🔄 Auto-closing popup in 2 seconds (unfilled count = ${unfilledFields})`);
+      setTimeout(() => {
+        console.log('🔄 Executing delayed popup close');
+        window.close();
+      }, 2000);
+    }
   }
 
   /**
