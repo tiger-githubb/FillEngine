@@ -9,7 +9,7 @@
 
   "permissions": ["activeTab", "tabs", "storage", "scripting"],
 
-  "host_permissions": ["https://docs.google.com/forms/*"],
+  "host_permissions": ["https://docs.google.com/forms/*", "https://storage.googleapis.com/*"],
 
   "web_accessible_resources": [
     {

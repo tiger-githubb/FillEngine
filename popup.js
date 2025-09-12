@@ -38,8 +38,29 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("├── csvModeBtn:", !!csvModeBtn);
   console.log("└── profileSelect:", !!profileSelect);
 
+  // Configuration du stockage cloud
+  const CLOUD_CONFIG = {
+    // URL de votre Google Cloud Storage configuré
+    baseUrl: "https://storage.googleapis.com/fillengine-profiles-prod",
+    profilesFile: "profiles.csv",
+    versionFile: "version.json",
+    // Cache settings
+    cacheKey: "cloudProfilesCache",
+    versionKey: "profilesVersion",
+    lastUpdateKey: "profilesLastUpdate",
+    // Cache expiration: 24 heures en millisecondes
+    cacheExpiration: 24 * 60 * 60 * 1000
+  };
+
   // Current user data (will be updated when CSV is loaded or profile selected)
   let currentUserData = null;
+  
+  // Cloud profiles cache status
+  let cloudProfilesStatus = {
+    isLoading: false,
+    lastAttempt: null,
+    error: null
+  };
   
   // Variables d'optimisation
   let resultUpdateTimer = null;
@@ -165,23 +186,299 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   /**
-   * Load and parse the built-in profiles database
+   * Obtenir la version actuelle de l'extension
+   * @returns {string} Version de l'extension
+   */
+  function getExtensionVersion() {
+    return chrome.runtime.getManifest().version;
+  }
+
+  /**
+   * Vérifier si une mise à jour des profils est nécessaire
+   * @returns {Promise<boolean>} True si une mise à jour est nécessaire
+   */
+  async function shouldUpdateProfiles() {
+    try {
+      const result = await chrome.storage.local.get([
+        CLOUD_CONFIG.versionKey,
+        CLOUD_CONFIG.lastUpdateKey
+      ]);
+      
+      const currentExtensionVersion = getExtensionVersion();
+      const cachedVersion = result[CLOUD_CONFIG.versionKey];
+      const lastUpdate = result[CLOUD_CONFIG.lastUpdateKey];
+      
+      console.log("🔍 Checking if profile update needed:");
+      console.log("├── Current extension version:", currentExtensionVersion);
+      console.log("├── Cached version:", cachedVersion);
+      console.log("└── Last update:", lastUpdate ? new Date(lastUpdate).toISOString() : "Never");
+      
+      // Mise à jour nécessaire si :
+      // 1. Pas de version en cache
+      // 2. Version de l'extension différente
+      // 3. Cache expiré (24h)
+      if (!cachedVersion) {
+        console.log("📥 Update needed: No cached version");
+        return true;
+      }
+      
+      if (cachedVersion !== currentExtensionVersion) {
+        console.log("📥 Update needed: Extension version changed");
+        return true;
+      }
+      
+      if (!lastUpdate || (Date.now() - lastUpdate) > CLOUD_CONFIG.cacheExpiration) {
+        console.log("📥 Update needed: Cache expired");
+        return true;
+      }
+      
+      console.log("✅ No update needed: Cache is valid");
+      return false;
+    } catch (error) {
+      console.error("Error checking update necessity:", error);
+      return true; // En cas d'erreur, forcer la mise à jour
+    }
+  }
+
+  /**
+   * Charger les profils depuis le cache local
+   * @returns {Promise<Array|null>} Profils en cache ou null si pas de cache
+   */
+  async function loadProfilesFromCache() {
+    try {
+      const result = await chrome.storage.local.get(CLOUD_CONFIG.cacheKey);
+      const cachedProfiles = result[CLOUD_CONFIG.cacheKey];
+      
+      if (cachedProfiles && Array.isArray(cachedProfiles)) {
+        console.log("📦 Loaded profiles from cache:", cachedProfiles.length, "profiles");
+        return cachedProfiles;
+      }
+      
+      console.log("📦 No valid profiles found in cache");
+      return null;
+    } catch (error) {
+      console.error("Error loading profiles from cache:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Sauvegarder les profils dans le cache local
+   * @param {Array} profiles - Profils à mettre en cache
+   */
+  async function saveProfilesToCache(profiles) {
+    try {
+      const currentVersion = getExtensionVersion();
+      const now = Date.now();
+      
+      await chrome.storage.local.set({
+        [CLOUD_CONFIG.cacheKey]: profiles,
+        [CLOUD_CONFIG.versionKey]: currentVersion,
+        [CLOUD_CONFIG.lastUpdateKey]: now
+      });
+      
+      console.log("💾 Profiles saved to cache:");
+      console.log("├── Profiles count:", profiles.length);
+      console.log("├── Version:", currentVersion);
+      console.log("└── Timestamp:", new Date(now).toISOString());
+    } catch (error) {
+      console.error("Error saving profiles to cache:", error);
+    }
+  }
+
+  /**
+   * Charger les profils depuis Google Cloud Storage
+   * @returns {Promise<Array>} Array of profile objects
+   */
+  async function loadProfilesFromCloud() {
+    try {
+      console.log("☁️ Loading profiles from cloud storage...");
+      
+      const profilesUrl = `${CLOUD_CONFIG.baseUrl}/${CLOUD_CONFIG.profilesFile}`;
+      console.log("├── URL:", profilesUrl);
+      
+      const response = await fetch(profilesUrl, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const csvContent = await response.text();
+      console.log("├── Content length:", csvContent.length);
+      
+      if (!csvContent || csvContent.trim().length === 0) {
+        throw new Error("Empty response from cloud storage");
+      }
+      
+      const profiles = parseProfilesCSV(csvContent);
+      console.log("✅ Profiles loaded from cloud:", profiles.length, "profiles");
+      
+      return profiles;
+    } catch (error) {
+      console.error("❌ Error loading profiles from cloud:", error);
+      throw new Error(`Impossible de charger les profils depuis le cloud: ${error.message}`);
+    }
+  }
+
+  /**
+   * Load and parse the profiles database (cloud-first with cache)
    * @returns {Promise<Array>} Array of profile objects
    */
   async function loadProfilesDatabase() {
     try {
-      const response = await fetch(chrome.runtime.getURL("profiles.csv"));
-      const csvContent = await response.text();
-
-      console.log("🗄️ Profiles database loaded");
-      console.log("├── Content length:", csvContent.length);
-
-      return parseProfilesCSV(csvContent);
-    } catch (error) {
-      console.error("Error loading profiles database:", error);
-      throw new Error("Impossible de charger la base de données des profils");
+      console.log("🚀 Loading profiles database...");
+      
+      // Vérifier si une mise à jour est nécessaire
+      const needsUpdate = await shouldUpdateProfiles();
+      
+      if (!needsUpdate) {
+        // Utiliser le cache si disponible
+        const cachedProfiles = await loadProfilesFromCache();
+        if (cachedProfiles) {
+          console.log("✅ Using cached profiles");
+          return cachedProfiles;
+        }
+      }
+      
+      // Charger depuis le cloud
+      console.log("☁️ Loading fresh profiles from cloud...");
+      const cloudProfiles = await loadProfilesFromCloud();
+      
+      // Sauvegarder en cache
+      await saveProfilesToCache(cloudProfiles);
+      
+      return cloudProfiles;
+      
+    } catch (cloudError) {
+      console.warn("⚠️ Cloud loading failed, trying cache fallback...");
+      
+      // Fallback vers le cache en cas d'erreur cloud
+      const cachedProfiles = await loadProfilesFromCache();
+      if (cachedProfiles) {
+        console.log("🔄 Using cached profiles as fallback");
+        return cachedProfiles;
+      }
+      
+      // Fallback vers le fichier local si disponible
+      try {
+        console.log("🔄 Trying local file fallback...");
+        const response = await fetch(chrome.runtime.getURL("profiles.csv"));
+        if (response.ok) {
+          const csvContent = await response.text();
+          const localProfiles = parseProfilesCSV(csvContent);
+          console.log("✅ Using local file fallback:", localProfiles.length, "profiles");
+          return localProfiles;
+        }
+      } catch (localError) {
+        console.log("❌ Local fallback failed:", localError.message);
+      }
+      
+      // Si aucun fallback disponible
+      console.error("❌ No profiles available from any source");
+      throw new Error("Impossible de charger les profils (cloud, cache et local indisponibles)");
     }
   }
+
+  /**
+   * Forcer le rafraîchissement des profils depuis le cloud
+   * @param {boolean} showFeedback - Afficher un feedback à l'utilisateur
+   */
+  async function forceRefreshProfiles(showFeedback = true) {
+    try {
+      if (showFeedback) {
+        showStatus("Mise à jour des profils...", "info");
+      }
+      
+      console.log("🔄 Forcing profiles refresh from cloud...");
+      
+      // Vider le cache pour forcer le rechargement
+      await chrome.storage.local.remove([
+        CLOUD_CONFIG.cacheKey,
+        CLOUD_CONFIG.versionKey,
+        CLOUD_CONFIG.lastUpdateKey
+      ]);
+      
+      // Recharger les profils
+      availableProfiles = await loadProfilesFromCloud();
+      
+      // Sauvegarder en cache
+      await saveProfilesToCache(availableProfiles);
+      
+      // Mettre à jour l'interface
+      populateProfileSelect(availableProfiles);
+      
+      if (showFeedback) {
+        showStatus(`✅ Profils mis à jour: ${availableProfiles.length} profils chargés`, "success");
+        setTimeout(() => hideStatus(), 3000);
+      }
+      
+      console.log("✅ Profiles refreshed successfully:", availableProfiles.length, "profiles");
+      
+    } catch (error) {
+      console.error("Error refreshing profiles:", error);
+      
+      if (showFeedback) {
+        showStatus(`Erreur de mise à jour: ${error.message}`, "error");
+      }
+      
+      // Fallback vers le cache en cas d'erreur
+      const cachedProfiles = await loadProfilesFromCache();
+      if (cachedProfiles) {
+        availableProfiles = cachedProfiles;
+        populateProfileSelect(availableProfiles);
+        
+        if (showFeedback) {
+          showStatus("⚠️ Utilisation des profils en cache", "info");
+        }
+      }
+    }
+  }
+
+  /**
+   * Fonction de debug pour tester manuellement le chargement cloud
+   * Accessible depuis la console : window.debugCloudProfiles()
+   */
+  window.debugCloudProfiles = async function() {
+    console.log("🧪 === DEBUG CLOUD PROFILES ===");
+    console.log("📍 URL:", `${CLOUD_CONFIG.baseUrl}/${CLOUD_CONFIG.profilesFile}`);
+    
+    try {
+      // Test de connectivité
+      console.log("🔄 Testing cloud connectivity...");
+      const testResponse = await fetch(`${CLOUD_CONFIG.baseUrl}/${CLOUD_CONFIG.profilesFile}`, {
+        method: 'HEAD'
+      });
+      console.log("📊 HEAD Status:", testResponse.status, testResponse.statusText);
+      
+      // Test de chargement complet
+      console.log("🔄 Testing full load...");
+      const profiles = await loadProfilesFromCloud();
+      console.log("✅ Profiles loaded:", profiles.length);
+      console.log("📋 First profile:", profiles[0]);
+      
+      return profiles;
+    } catch (error) {
+      console.error("❌ Debug failed:", error);
+      
+      // Test fallback cache
+      console.log("🔄 Testing cache fallback...");
+      const cached = await loadProfilesFromCache();
+      if (cached) {
+        console.log("✅ Cache fallback works:", cached.length, "profiles");
+        return cached;
+      } else {
+        console.log("❌ No cache available");
+      }
+      
+      throw error;
+    }
+  };
 
   /**
    * Parse profiles CSV content and convert to array of profile objects
