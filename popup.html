@@ -104,6 +104,58 @@
         letter-spacing: -0.1px;
       }
 
+      .profile-label-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+
+      .refresh-button {
+        background: #f8f9fa;
+        border: 1px solid #e6ebf1;
+        border-radius: 6px;
+        padding: 6px 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+        color: #6c737f;
+        min-width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .refresh-button:hover {
+        background: #e6ebf1;
+        border-color: #d1d5db;
+        color: #1a1d1f;
+        transform: rotate(45deg);
+      }
+
+      .refresh-button:active {
+        transform: rotate(90deg) scale(0.95);
+        background: #d1d5db;
+      }
+
+      .refresh-button:disabled {
+        background: #f1f3f5;
+        border-color: #e5e7eb;
+        color: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .refresh-button.loading {
+        animation: spin 1s linear infinite;
+      }
+
+      .refresh-icon {
+        font-size: 14px;
+        line-height: 1;
+      }
+
       .profile-select {
         width: 100%;
         padding: 12px 16px;
@@ -626,7 +678,12 @@
 
         <!-- Profile Selection Section -->
         <div id="profileSection" class="profile-section">
-          <label for="profileSelect" class="profile-label">Choisir un profil</label>
+          <div class="profile-label-container">
+            <label for="profileSelect" class="profile-label">Choisir un profil</label>
+            <button id="refreshProfilesBtn" class="refresh-button" title="Rafraîchir les profils depuis le cloud">
+              <span class="refresh-icon">🔄</span>
+            </button>
+          </div>
           <select id="profileSelect" class="profile-select">
             <option value="">Sélectionner...</option>
           </select>

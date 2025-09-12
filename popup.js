@@ -28,6 +28,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const profileSection = document.getElementById("profileSection");
   const csvSection = document.getElementById("csvSection");
   const profileSelect = document.getElementById("profileSelect");
+  const refreshProfilesBtn = document.getElementById("refreshProfilesBtn");
 
   console.log("🔧 DOM ELEMENTS FOUND:");
   console.log("├── fillFormBtn:", !!fillFormBtn);
@@ -36,7 +37,8 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("├── userProfileDisplay:", !!userProfileDisplay);
   console.log("├── profileModeBtn:", !!profileModeBtn);
   console.log("├── csvModeBtn:", !!csvModeBtn);
-  console.log("└── profileSelect:", !!profileSelect);
+  console.log("├── profileSelect:", !!profileSelect);
+  console.log("└── refreshProfilesBtn:", !!refreshProfilesBtn);
 
   // Configuration du stockage cloud
   const CLOUD_CONFIG = {
@@ -426,6 +428,13 @@ document.addEventListener("DOMContentLoaded", function () {
    */
   async function forceRefreshProfiles(showFeedback = true) {
     try {
+      // Mettre à jour l'état du bouton de rafraîchissement
+      if (refreshProfilesBtn) {
+        refreshProfilesBtn.disabled = true;
+        refreshProfilesBtn.classList.add('loading');
+        refreshProfilesBtn.title = "Rafraîchissement en cours...";
+      }
+      
       if (showFeedback) {
         showStatus("Mise à jour des profils...", "info");
       }
@@ -472,13 +481,67 @@ document.addEventListener("DOMContentLoaded", function () {
           showStatus("⚠️ Utilisation des profils en cache", "info");
         }
       }
+    } finally {
+      // Restaurer l'état du bouton de rafraîchissement
+      if (refreshProfilesBtn) {
+        refreshProfilesBtn.disabled = false;
+        refreshProfilesBtn.classList.remove('loading');
+        refreshProfilesBtn.title = "Rafraîchir les profils depuis le cloud";
+      }
     }
   }
 
   /**
-   * Fonction de debug pour tester manuellement le chargement cloud
-   * Accessible depuis la console : window.debugCloudProfiles()
+   * Déclencher automatiquement le rafraîchissement lors de la mise à jour de l'extension
+   * @returns {Promise<boolean>} True si un rafraîchissement a été déclenché
    */
+  async function checkAndTriggerAutoRefresh() {
+    try {
+      console.log("🔍 Checking for extension update...");
+      
+      // Vérifier si l'extension a été mise à jour via background.js
+      const extensionUpdateCheck = await chrome.storage.local.get(['extensionUpdated', 'updateTimestamp']);
+      
+      if (extensionUpdateCheck.extensionUpdated) {
+        console.log("🔄 Extension update flag detected, forcing refresh...");
+        
+        // Nettoyer le flag de mise à jour
+        await chrome.storage.local.remove(['extensionUpdated', 'updateTimestamp']);
+        
+        // Déclencher le rafraîchissement forcé
+        await forceRefreshProfiles(false);
+        
+        // Afficher un message de mise à jour automatique
+        showStatus("🆕 Profils mis à jour automatiquement après mise à jour de l'extension", "success");
+        setTimeout(() => hideStatus(), 3000);
+        
+        return true;
+      }
+      
+      // Vérifier si une mise à jour est nécessaire (logique existante)
+      const needsUpdate = await shouldUpdateProfiles();
+      
+      if (needsUpdate) {
+        console.log("🔄 Standard update needed, triggering auto-refresh...");
+        
+        // Déclencher le rafraîchissement automatique (sans feedback visuel excessif)
+        await forceRefreshProfiles(false);
+        
+        // Afficher un message discret de mise à jour
+        showStatus("🆕 Profils mis à jour automatiquement", "success");
+        setTimeout(() => hideStatus(), 2000);
+        
+        return true;
+      }
+      
+      console.log("✅ No extension update detected");
+      return false;
+      
+    } catch (error) {
+      console.error("Error during auto-refresh check:", error);
+      return false;
+    }
+  }
   window.debugCloudProfiles = async function() {
     console.log("🧪 === DEBUG CLOUD PROFILES ===");
     console.log("📍 URL:", `${CLOUD_CONFIG.baseUrl}/${CLOUD_CONFIG.profilesFile}`);
@@ -1490,6 +1553,9 @@ document.addEventListener("DOMContentLoaded", function () {
     // Keep popup open during operations
     keepPopupOpen();
 
+    // Vérifier et déclencher le rafraîchissement automatique si nécessaire
+    await checkAndTriggerAutoRefresh();
+
     // Initialize profiles mode by default
     await initializeProfilesMode();
 
@@ -1506,6 +1572,14 @@ document.addEventListener("DOMContentLoaded", function () {
       handleProfileSelection(e.target.value);
     });
 
+    // Add refresh profiles button handler
+    if (refreshProfilesBtn) {
+      refreshProfilesBtn.addEventListener("click", () => {
+        console.log("🔄 Refresh profiles button clicked");
+        forceRefreshProfiles(true);
+      });
+    }
+
     // Add CSV file input handler
     csvFileInput.addEventListener("change", handleCSVFile);
 
@@ -1520,4 +1594,60 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Initialize the popup
   initialize();
+
+  // Exposer les fonctions utilitaires pour le debug et le rafraîchissement manuel
+  /**
+   * Fonction exposée pour forcer le rafraîchissement depuis la console
+   * Accessible depuis la console : window.forceRefreshProfiles()
+   */
+  window.forceRefreshProfiles = async function() {
+    console.log("🔄 === FORCE REFRESH PROFILES (MANUAL) ===");
+    await forceRefreshProfiles(true);
+  };
+
+  /**
+   * Fonction pour obtenir les informations sur la source des profils
+   * Accessible depuis la console : window.getProfilesSourceInfo()
+   */
+  window.getProfilesSourceInfo = function() {
+    console.log("📊 === PROFILES SOURCE INFO ===");
+    console.log("├── Current source:", profilesSource);
+    console.log("├── Metadata:", profileSourceMetadata);
+    console.log("├── Available profiles:", availableProfiles.length);
+    console.log("└── Cloud status:", cloudProfilesStatus);
+    return {
+      source: profilesSource,
+      metadata: profileSourceMetadata,
+      profilesCount: availableProfiles.length,
+      cloudStatus: cloudProfilesStatus
+    };
+  };
+
+  // Exposer les fonctions utilitaires pour le debug et le rafraîchissement manuel
+  /**
+   * Fonction exposée pour forcer le rafraîchissement depuis la console
+   * Accessible depuis la console : window.forceRefreshProfiles()
+   */
+  window.forceRefreshProfiles = async function() {
+    console.log("🔄 === FORCE REFRESH PROFILES (MANUAL) ===");
+    await forceRefreshProfiles(true);
+  };
+
+  /**
+   * Fonction pour obtenir les informations sur la source des profils
+   * Accessible depuis la console : window.getProfilesSourceInfo()
+   */
+  window.getProfilesSourceInfo = function() {
+    console.log("📊 === PROFILES SOURCE INFO ===");
+    console.log("├── Current source:", profilesSource);
+    console.log("├── Metadata:", profileSourceMetadata);
+    console.log("├── Available profiles:", availableProfiles.length);
+    console.log("└── Cloud status:", cloudProfilesStatus);
+    return {
+      source: profilesSource,
+      metadata: profileSourceMetadata,
+      profilesCount: availableProfiles.length,
+      cloudStatus: cloudProfilesStatus
+    };
+  };
 });
