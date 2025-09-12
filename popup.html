@@ -122,6 +122,25 @@
         padding-right: 40px;
       }
 
+      /* Profile source indicators in dropdown */
+      .profile-select option.cloud-profile {
+        background: linear-gradient(90deg, #e0f2fe 0%, #ffffff 25%);
+        color: #0369a1;
+        font-weight: 500;
+      }
+
+      .profile-select option.local-profile {
+        background: linear-gradient(90deg, #fef3c7 0%, #ffffff 25%);
+        color: #92400e;
+        font-weight: 400;
+      }
+
+      .profile-select option.cache-profile {
+        background: linear-gradient(90deg, #f3e8ff 0%, #ffffff 25%);
+        color: #7c3aed;
+        font-weight: 400;
+      }
+
       .profile-select:hover {
         border-color: #9ca3af;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -201,6 +220,31 @@
         margin-bottom: 20px;
       }
 
+      /* Profile source indicators for user profile display */
+      .user-profile.cloud-source {
+        background: linear-gradient(135deg, #e0f2fe 0%, #f8f9fa 100%);
+        border-color: #0ea5e9;
+        box-shadow: 0 2px 4px rgba(14, 165, 233, 0.1);
+      }
+
+      .user-profile.local-source {
+        background: linear-gradient(135deg, #fef3c7 0%, #f8f9fa 100%);
+        border-color: #f59e0b;
+        box-shadow: 0 2px 4px rgba(245, 158, 11, 0.1);
+      }
+
+      .user-profile.cache-source {
+        background: linear-gradient(135deg, #f3e8ff 0%, #f8f9fa 100%);
+        border-color: #8b5cf6;
+        box-shadow: 0 2px 4px rgba(139, 92, 246, 0.1);
+      }
+
+      .user-profile.csv-upload-source {
+        background: linear-gradient(135deg, #ecfdf5 0%, #f8f9fa 100%);
+        border-color: #10b981;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.1);
+      }
+
       .profile-header {
         font-size: 13px;
         font-weight: 600;
@@ -212,6 +256,37 @@
         gap: 6px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+      }
+
+      /* Source indicators for profile header */
+      .profile-source-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-left: 8px;
+      }
+
+      .profile-source-badge.cloud {
+        background: #0ea5e9;
+        color: #ffffff;
+      }
+
+      .profile-source-badge.local {
+        background: #f59e0b;
+        color: #ffffff;
+      }
+
+      .profile-source-badge.cache {
+        background: #8b5cf6;
+        color: #ffffff;
+      }
+
+      .profile-source-badge.csv-upload {
+        background: #10b981;
+        color: #ffffff;
       }
 
       .profile-id {

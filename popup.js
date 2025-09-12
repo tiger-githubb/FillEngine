@@ -62,6 +62,15 @@ document.addEventListener("DOMContentLoaded", function () {
     error: null
   };
   
+  // Profile source tracking
+  let profilesSource = 'unknown'; // 'cloud', 'cache', 'local', 'unknown'
+  let profileSourceMetadata = {
+    loadedAt: null,
+    source: 'unknown',
+    fallbackUsed: false,
+    errorMessage: null
+  };
+  
   // Variables d'optimisation
   let resultUpdateTimer = null;
   let isUpdatingResults = false;
@@ -251,6 +260,13 @@ document.addEventListener("DOMContentLoaded", function () {
       
       if (cachedProfiles && Array.isArray(cachedProfiles)) {
         console.log("📦 Loaded profiles from cache:", cachedProfiles.length, "profiles");
+        profilesSource = 'cache';
+        profileSourceMetadata = {
+          loadedAt: Date.now(),
+          source: 'cache',
+          fallbackUsed: false,
+          errorMessage: null
+        };
         return cachedProfiles;
       }
       
@@ -319,9 +335,18 @@ document.addEventListener("DOMContentLoaded", function () {
       const profiles = parseProfilesCSV(csvContent);
       console.log("✅ Profiles loaded from cloud:", profiles.length, "profiles");
       
+      profilesSource = 'cloud';
+      profileSourceMetadata = {
+        loadedAt: Date.now(),
+        source: 'cloud',
+        fallbackUsed: false,
+        errorMessage: null
+      };
+      
       return profiles;
     } catch (error) {
       console.error("❌ Error loading profiles from cloud:", error);
+      profileSourceMetadata.errorMessage = error.message;
       throw new Error(`Impossible de charger les profils depuis le cloud: ${error.message}`);
     }
   }
@@ -362,6 +387,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const cachedProfiles = await loadProfilesFromCache();
       if (cachedProfiles) {
         console.log("🔄 Using cached profiles as fallback");
+        profileSourceMetadata.fallbackUsed = true;
         return cachedProfiles;
       }
       
@@ -373,6 +399,15 @@ document.addEventListener("DOMContentLoaded", function () {
           const csvContent = await response.text();
           const localProfiles = parseProfilesCSV(csvContent);
           console.log("✅ Using local file fallback:", localProfiles.length, "profiles");
+          
+          profilesSource = 'local';
+          profileSourceMetadata = {
+            loadedAt: Date.now(),
+            source: 'local',
+            fallbackUsed: true,
+            errorMessage: cloudError.message
+          };
+          
           return localProfiles;
         }
       } catch (localError) {
@@ -769,18 +804,45 @@ document.addEventListener("DOMContentLoaded", function () {
       const profession = profile.professional?.profession || "";
       const company = profile.professional?.company || "";
 
-      let displayText = `[${profile.id}] ${name}`;
+      // Add source indicator to profile name
+      let sourceIcon = '';
+      let sourceText = '';
+      
+      switch (profilesSource) {
+        case 'cloud':
+          sourceIcon = '☁️';
+          sourceText = profileSourceMetadata.fallbackUsed ? ' (Cloud/Fallback)' : ' (Cloud)';
+          option.className = 'cloud-profile';
+          break;
+        case 'cache':
+          sourceIcon = '📦';
+          sourceText = ' (Cache)';
+          option.className = 'cache-profile';
+          break;
+        case 'local':
+          sourceIcon = '📝';
+          sourceText = ' (Local)';
+          option.className = 'local-profile';
+          break;
+        default:
+          sourceIcon = '❓';
+          sourceText = ' (Unknown)';
+      }
+
+      let displayText = `${sourceIcon} [${profile.id}] ${name}`;
       if (profession) {
         displayText += ` - ${profession}`;
       }
+      displayText += sourceText;
 
       option.textContent = displayText;
       option.dataset.profile = JSON.stringify(profile);
+      option.dataset.source = profilesSource;
 
       profileSelect.appendChild(option);
     });
 
-    console.log(`✅ Populated profile selector with ${profiles.length} profiles`);
+    console.log(`✅ Populated profile selector with ${profiles.length} profiles from ${profilesSource}`);
   }
 
   /**
@@ -860,9 +922,69 @@ document.addEventListener("DOMContentLoaded", function () {
     if (userData.location?.nationality) details.push(`🌍 ${userData.location.nationality}`);
 
     profileDetails.innerHTML = details.join("<br>");
+    
+    // Apply source-specific styling to the profile display
+    userProfileDisplay.className = 'user-profile';
+    if (currentMode === 'profiles') {
+      switch (profilesSource) {
+        case 'cloud':
+          userProfileDisplay.classList.add('cloud-source');
+          break;
+        case 'cache':
+          userProfileDisplay.classList.add('cache-source');
+          break;
+        case 'local':
+          userProfileDisplay.classList.add('local-source');
+          break;
+      }
+    } else if (currentMode === 'csv' && profilesSource === 'csv-upload') {
+      userProfileDisplay.classList.add('csv-upload-source');
+    }
+    
+    // Add source badge to profile header
+    const profileHeaderSpan = document.querySelector('.profile-header span:first-child');
+    if (profileHeaderSpan) {
+      // Remove existing badge
+      const existingBadge = profileHeaderSpan.querySelector('.profile-source-badge');
+      if (existingBadge) {
+        existingBadge.remove();
+      }
+      
+      // Add new source badge
+      const badge = document.createElement('span');
+      let badgeClass = '';
+      let badgeText = '';
+      
+      if (currentMode === 'profiles') {
+        badgeClass = `profile-source-badge ${profilesSource}`;
+        switch (profilesSource) {
+          case 'cloud':
+            badgeText = profileSourceMetadata.fallbackUsed ? 'CLOUD*' : 'CLOUD';
+            break;
+          case 'cache':
+            badgeText = 'CACHE';
+            break;
+          case 'local':
+            badgeText = 'LOCAL';
+            break;
+          default:
+            badgeText = '?';
+        }
+      } else if (currentMode === 'csv' && profilesSource === 'csv-upload') {
+        badgeClass = 'profile-source-badge csv-upload';
+        badgeText = 'CSV';
+      }
+      
+      if (badgeText) {
+        badge.className = badgeClass;
+        badge.textContent = badgeText;
+        profileHeaderSpan.appendChild(badge);
+      }
+    }
+    
     userProfileDisplay.style.display = "block";
 
-    console.log("✅ Profile display updated");
+    console.log("✅ Profile display updated with source:", profilesSource);
   }
 
   /**
@@ -993,6 +1115,15 @@ document.addEventListener("DOMContentLoaded", function () {
         if (userData) {
           currentUserData = userData;
           console.log("✅ CSV parsed successfully:", userData);
+
+          // Set source for CSV upload
+          profilesSource = 'csv-upload';
+          profileSourceMetadata = {
+            loadedAt: Date.now(),
+            source: 'csv-upload',
+            fallbackUsed: false,
+            errorMessage: null
+          };
 
           // Update profile display
           updateProfileDisplay(userData);
