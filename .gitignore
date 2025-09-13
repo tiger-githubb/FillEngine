@@ -1,0 +1,63 @@
+# Dépendances Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Fichiers système
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Fichiers d'environnement
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Fichiers temporaires et de cache
+*.tmp
+*.temp
+.cache/
+.parcel-cache/
+
+# Fichiers de build et distribution
+dist/
+build/
+*.zip
+*.crx
+
+# Logs
+logs/
+*.log
+
+# Fichiers de configuration IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Fichiers de test et couverture
+coverage/
+.nyc_output/
+test-*.html
+
+# Fichiers spécifiques aux extensions Chrome
+*.pem
+key.pem
+
+# Fichiers de diagnostic et debug
+DIAGNOSTIC_*.md
+OPTIMISATIONS_*.md
+test-*.html
+debug-*.js
+
+# Fichiers de configuration temporaires
+cors-config.json
+example_*.csv

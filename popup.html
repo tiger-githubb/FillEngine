@@ -104,6 +104,58 @@
         letter-spacing: -0.1px;
       }
 
+      .profile-label-container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+
+      .refresh-button {
+        background: #f8f9fa;
+        border: 1px solid #e6ebf1;
+        border-radius: 6px;
+        padding: 6px 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 12px;
+        color: #6c737f;
+        min-width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .refresh-button:hover {
+        background: #e6ebf1;
+        border-color: #d1d5db;
+        color: #1a1d1f;
+        transform: rotate(45deg);
+      }
+
+      .refresh-button:active {
+        transform: rotate(90deg) scale(0.95);
+        background: #d1d5db;
+      }
+
+      .refresh-button:disabled {
+        background: #f1f3f5;
+        border-color: #e5e7eb;
+        color: #9ca3af;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .refresh-button.loading {
+        animation: spin 1s linear infinite;
+      }
+
+      .refresh-icon {
+        font-size: 14px;
+        line-height: 1;
+      }
+
       .profile-select {
         width: 100%;
         padding: 12px 16px;
@@ -120,6 +172,25 @@
         background-repeat: no-repeat;
         background-size: 16px;
         padding-right: 40px;
+      }
+
+      /* Profile source indicators in dropdown */
+      .profile-select option.cloud-profile {
+        background: linear-gradient(90deg, #e0f2fe 0%, #ffffff 25%);
+        color: #0369a1;
+        font-weight: 500;
+      }
+
+      .profile-select option.local-profile {
+        background: linear-gradient(90deg, #fef3c7 0%, #ffffff 25%);
+        color: #92400e;
+        font-weight: 400;
+      }
+
+      .profile-select option.cache-profile {
+        background: linear-gradient(90deg, #f1ebf7 0%, #ffffff 25%);
+        color: #030006;
+        font-weight: 400;
       }
 
       .profile-select:hover {
@@ -201,6 +272,31 @@
         margin-bottom: 20px;
       }
 
+      /* Profile source indicators for user profile display */
+      .user-profile.cloud-source {
+        background: linear-gradient(135deg, #e0f2fe 0%, #f8f9fa 100%);
+        border-color: #0ea5e9;
+        box-shadow: 0 2px 4px rgba(14, 165, 233, 0.1);
+      }
+
+      .user-profile.local-source {
+        background: linear-gradient(135deg, #fef3c7 0%, #f8f9fa 100%);
+        border-color: #f59e0b;
+        box-shadow: 0 2px 4px rgba(245, 158, 11, 0.1);
+      }
+
+      .user-profile.cache-source {
+        background: linear-gradient(135deg, #f3e8ff 0%, #f8f9fa 100%);
+        border-color: #8b5cf6;
+        box-shadow: 0 2px 4px rgba(139, 92, 246, 0.1);
+      }
+
+      .user-profile.csv-upload-source {
+        background: linear-gradient(135deg, #ecfdf5 0%, #f8f9fa 100%);
+        border-color: #10b981;
+        box-shadow: 0 2px 4px rgba(16, 185, 129, 0.1);
+      }
+
       .profile-header {
         font-size: 13px;
         font-weight: 600;
@@ -208,9 +304,52 @@
         margin-bottom: 8px;
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: 6px;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+      }
+
+      /* Source indicators for profile header */
+      .profile-source-badge {
+        font-size: 10px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-left: 8px;
+      }
+
+      .profile-source-badge.cloud {
+        background: #0ea5e9;
+        color: #ffffff;
+      }
+
+      .profile-source-badge.local {
+        background: #f59e0b;
+        color: #ffffff;
+      }
+
+      .profile-source-badge.cache {
+        background: #8b5cf6;
+        color: #ffffff;
+      }
+
+      .profile-source-badge.csv-upload {
+        background: #10b981;
+        color: #ffffff;
+      }
+
+      .profile-id {
+        font-size: 15px;
+        font-weight: 700;
+        color: #1a1d1f;
+        background: #e6ebf1;
+        padding: 3px 8px;
+        border-radius: 4px;
+        text-transform: none;
+        letter-spacing: 0;
       }
 
       .profile-name {
@@ -298,6 +437,9 @@
         border-radius: 8px;
         padding: 20px;
         display: none;
+        /* Optimisation GPU */
+        transform: translateZ(0);
+        will-change: transform;
       }
 
       .stats-header {
@@ -314,66 +456,108 @@
       .stats-grid {
         display: grid;
         grid-template-columns: 1fr 1fr 1fr;
-        gap: 16px;
-        margin-bottom: 20px;
+        gap: 8px;
+        justify-content: center;
+        justify-items: center;
       }
 
       .stat-item {
         text-align: center;
-        padding: 12px 8px;
+        padding: 6px 6px;
         background: #ffffff;
-        border-radius: 6px;
+        border-radius: 8px;
         border: 1px solid #ebebeb;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        min-height: 10px;
+        max-width: 40px;
+      }
+
+      .stat-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
       }
 
       .stat-value {
-        font-size: 24px;
+        font-size: 18px;
         font-weight: 700;
         color: #222222;
         line-height: 1;
         letter-spacing: -0.3px;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
       }
 
       /* Colored numbers */
       .stat-value--detected {
-        color: #2563eb; /* blue */
+        color: #1d4ed8; /* deeper blue */
+        background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
       .stat-value--filled {
-        color: #16a34a; /* green */
+        color: #059669; /* deeper green */
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
       .stat-value--unfilled {
         color: #dc2626; /* red */
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
       }
 
-      .stat-label {
-        font-size: 12px;
-        color: #717171;
-        margin-top: 4px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.3px;
-      }
 
       /* Results Details */
       .results {
-        max-height: 140px;
+        max-height: 160px;
         overflow-y: auto;
         border-top: 1px solid #ebebeb;
         padding-top: 16px;
-        text-align: center;
+        text-align: left;
+        /* Optimisation rendu */
+        contain: layout style;
+        transform: translateZ(0);
       }
 
       .result-item {
-        display: grid;
-        grid-template-columns: 1fr 100px;
-        gap: 12px;
+        display: block;
         padding: 8px 0;
         font-size: 13px;
-        align-items: center;
+        border-bottom: 1px solid #f3f4f6;
+        /* Optimisation rendu */
+        contain: layout;
+      }
+      
+      .result-item:last-child {
+        border-bottom: none;
+      }
+      
+      .result-item.info {
+        font-style: italic;
+        opacity: 0.8;
+        border-bottom: none;
+      }
+      
+      .result-item.success {
+        background-color: #f0fdf4;
+        border-left: 3px solid #16a34a;
+        padding-left: 12px;
+        margin-left: -4px;
+      }
+      
+      .result-item.error {
+        background-color: #fef2f2;
+        border-left: 3px solid #dc2626;
+        padding-left: 12px;
+        margin-left: -4px;
       }
 
       .result-icon {
@@ -406,13 +590,12 @@
 
       /* Results table style */
       .results-header {
-        display: grid;
-        grid-template-columns: 1fr 100px;
-        gap: 12px;
+        display: block;
         font-weight: 600;
         padding-bottom: 8px;
         border-bottom: 1px solid #ebebeb;
         margin-bottom: 8px;
+        text-align: center;
       }
 
       /* Scrollbar */
@@ -495,7 +678,12 @@
 
         <!-- Profile Selection Section -->
         <div id="profileSection" class="profile-section">
-          <label for="profileSelect" class="profile-label">Choisir un profil</label>
+          <div class="profile-label-container">
+            <label for="profileSelect" class="profile-label">Choisir un profil</label>
+            <button id="refreshProfilesBtn" class="refresh-button" title="Rafraîchir les profils depuis le cloud">
+              <span class="refresh-icon">🔄</span>
+            </button>
+          </div>
           <select id="profileSelect" class="profile-select">
             <option value="">Sélectionner...</option>
           </select>
@@ -510,7 +698,10 @@
 
         <!-- User Profile Display -->
         <div id="userProfileDisplay" class="user-profile" style="display: none">
-          <div class="profile-header">Profil actif</div>
+          <div class="profile-header">
+            <span>Profil actif</span>
+            <span class="profile-id" id="profileId"></span>
+          </div>
           <div class="profile-info">
             <div class="profile-name" id="profileName">-</div>
             <div class="profile-details" id="profileDetails">-</div>
@@ -532,15 +723,12 @@
           <div class="stats-grid">
             <div class="stat-item">
               <div class="stat-value stat-value--detected" id="fieldsDetected">-</div>
-              <div class="stat-label">Questions</div>
             </div>
             <div class="stat-item">
               <div class="stat-value stat-value--unfilled" id="fieldsUnfilled">-</div>
-              <div class="stat-label">Non remplis</div>
             </div>
             <div class="stat-item">
               <div class="stat-value stat-value--filled" id="fieldsFilled">-</div>
-              <div class="stat-label">Remplis</div>
             </div>
           </div>
 

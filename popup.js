@@ -20,6 +20,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const userProfileDisplay = document.getElementById("userProfileDisplay");
   const profileName = document.getElementById("profileName");
   const profileDetails = document.getElementById("profileDetails");
+  const profileId = document.getElementById("profileId");
 
   // New DOM Elements for profiles
   const profileModeBtn = document.getElementById("profileModeBtn");
@@ -27,6 +28,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const profileSection = document.getElementById("profileSection");
   const csvSection = document.getElementById("csvSection");
   const profileSelect = document.getElementById("profileSelect");
+  const refreshProfilesBtn = document.getElementById("refreshProfilesBtn");
 
   console.log("🔧 DOM ELEMENTS FOUND:");
   console.log("├── fillFormBtn:", !!fillFormBtn);
@@ -35,10 +37,65 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("├── userProfileDisplay:", !!userProfileDisplay);
   console.log("├── profileModeBtn:", !!profileModeBtn);
   console.log("├── csvModeBtn:", !!csvModeBtn);
-  console.log("└── profileSelect:", !!profileSelect);
+  console.log("├── profileSelect:", !!profileSelect);
+  console.log("└── refreshProfilesBtn:", !!refreshProfilesBtn);
+
+  // Configuration du stockage cloud
+  const CLOUD_CONFIG = {
+    // URL de votre Google Cloud Storage configuré
+    baseUrl: "https://storage.googleapis.com/fillengine-profiles-prod",
+    profilesFile: "profiles.csv",
+    versionFile: "version.json",
+    // Cache settings
+    cacheKey: "cloudProfilesCache",
+    versionKey: "profilesVersion",
+    lastUpdateKey: "profilesLastUpdate",
+    // Cache expiration: 24 heures en millisecondes
+    cacheExpiration: 24 * 60 * 60 * 1000
+  };
 
   // Current user data (will be updated when CSV is loaded or profile selected)
   let currentUserData = null;
+  
+  // Cloud profiles cache status
+  let cloudProfilesStatus = {
+    isLoading: false,
+    lastAttempt: null,
+    error: null
+  };
+  
+  // Profile source tracking
+  let profilesSource = 'unknown'; // 'cloud', 'cache', 'local', 'unknown'
+  let profileSourceMetadata = {
+    loadedAt: null,
+    source: 'unknown',
+    fallbackUsed: false,
+    errorMessage: null
+  };
+  
+  // Variables d'optimisation
+  let resultUpdateTimer = null;
+  let isUpdatingResults = false;
+
+  /**
+   * Debounced update function pour éviter les mises à jour trop fréquentes
+   * @param {Array} results - Array of field fill results
+   */
+  function updateResultsDebounced(results) {
+    if (isUpdatingResults) return;
+    
+    // Annuler le timer précédent
+    if (resultUpdateTimer) {
+      cancelAnimationFrame(resultUpdateTimer);
+    }
+    
+    resultUpdateTimer = requestAnimationFrame(() => {
+      isUpdatingResults = true;
+      updateStats(results);
+      showResults(results);
+      isUpdatingResults = false;
+    });
+  }
   let currentMode = "profiles"; // "profiles" or "csv"
   let availableProfiles = [];
 
@@ -140,23 +197,386 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   /**
-   * Load and parse the built-in profiles database
+   * Obtenir la version actuelle de l'extension
+   * @returns {string} Version de l'extension
+   */
+  function getExtensionVersion() {
+    return chrome.runtime.getManifest().version;
+  }
+
+  /**
+   * Vérifier si une mise à jour des profils est nécessaire
+   * @returns {Promise<boolean>} True si une mise à jour est nécessaire
+   */
+  async function shouldUpdateProfiles() {
+    try {
+      const result = await chrome.storage.local.get([
+        CLOUD_CONFIG.versionKey,
+        CLOUD_CONFIG.lastUpdateKey
+      ]);
+      
+      const currentExtensionVersion = getExtensionVersion();
+      const cachedVersion = result[CLOUD_CONFIG.versionKey];
+      const lastUpdate = result[CLOUD_CONFIG.lastUpdateKey];
+      
+      console.log("🔍 Checking if profile update needed:");
+      console.log("├── Current extension version:", currentExtensionVersion);
+      console.log("├── Cached version:", cachedVersion);
+      console.log("└── Last update:", lastUpdate ? new Date(lastUpdate).toISOString() : "Never");
+      
+      // Mise à jour nécessaire si :
+      // 1. Pas de version en cache
+      // 2. Version de l'extension différente
+      // 3. Cache expiré (24h)
+      if (!cachedVersion) {
+        console.log("📥 Update needed: No cached version");
+        return true;
+      }
+      
+      if (cachedVersion !== currentExtensionVersion) {
+        console.log("📥 Update needed: Extension version changed");
+        return true;
+      }
+      
+      if (!lastUpdate || (Date.now() - lastUpdate) > CLOUD_CONFIG.cacheExpiration) {
+        console.log("📥 Update needed: Cache expired");
+        return true;
+      }
+      
+      console.log("✅ No update needed: Cache is valid");
+      return false;
+    } catch (error) {
+      console.error("Error checking update necessity:", error);
+      return true; // En cas d'erreur, forcer la mise à jour
+    }
+  }
+
+  /**
+   * Charger les profils depuis le cache local
+   * @returns {Promise<Array|null>} Profils en cache ou null si pas de cache
+   */
+  async function loadProfilesFromCache() {
+    try {
+      const result = await chrome.storage.local.get(CLOUD_CONFIG.cacheKey);
+      const cachedProfiles = result[CLOUD_CONFIG.cacheKey];
+      
+      if (cachedProfiles && Array.isArray(cachedProfiles)) {
+        console.log("📦 Loaded profiles from cache:", cachedProfiles.length, "profiles");
+        profilesSource = 'cache';
+        profileSourceMetadata = {
+          loadedAt: Date.now(),
+          source: 'cache',
+          fallbackUsed: false,
+          errorMessage: null
+        };
+        return cachedProfiles;
+      }
+      
+      console.log("📦 No valid profiles found in cache");
+      return null;
+    } catch (error) {
+      console.error("Error loading profiles from cache:", error);
+      return null;
+    }
+  }
+
+  /**
+   * Sauvegarder les profils dans le cache local
+   * @param {Array} profiles - Profils à mettre en cache
+   */
+  async function saveProfilesToCache(profiles) {
+    try {
+      const currentVersion = getExtensionVersion();
+      const now = Date.now();
+      
+      await chrome.storage.local.set({
+        [CLOUD_CONFIG.cacheKey]: profiles,
+        [CLOUD_CONFIG.versionKey]: currentVersion,
+        [CLOUD_CONFIG.lastUpdateKey]: now
+      });
+      
+      console.log("💾 Profiles saved to cache:");
+      console.log("├── Profiles count:", profiles.length);
+      console.log("├── Version:", currentVersion);
+      console.log("└── Timestamp:", new Date(now).toISOString());
+    } catch (error) {
+      console.error("Error saving profiles to cache:", error);
+    }
+  }
+
+  /**
+   * Charger les profils depuis Google Cloud Storage
+   * @returns {Promise<Array>} Array of profile objects
+   */
+  async function loadProfilesFromCloud() {
+    try {
+      console.log("☁️ Loading profiles from cloud storage...");
+      
+      const profilesUrl = `${CLOUD_CONFIG.baseUrl}/${CLOUD_CONFIG.profilesFile}`;
+      console.log("├── URL:", profilesUrl);
+      
+      const response = await fetch(profilesUrl, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const csvContent = await response.text();
+      console.log("├── Content length:", csvContent.length);
+      
+      if (!csvContent || csvContent.trim().length === 0) {
+        throw new Error("Empty response from cloud storage");
+      }
+      
+      const profiles = parseProfilesCSV(csvContent);
+      console.log("✅ Profiles loaded from cloud:", profiles.length, "profiles");
+      
+      profilesSource = 'cloud';
+      profileSourceMetadata = {
+        loadedAt: Date.now(),
+        source: 'cloud',
+        fallbackUsed: false,
+        errorMessage: null
+      };
+      
+      return profiles;
+    } catch (error) {
+      console.error("❌ Error loading profiles from cloud:", error);
+      profileSourceMetadata.errorMessage = error.message;
+      throw new Error(`Impossible de charger les profils depuis le cloud: ${error.message}`);
+    }
+  }
+
+  /**
+   * Load and parse the profiles database (cloud-first with cache)
    * @returns {Promise<Array>} Array of profile objects
    */
   async function loadProfilesDatabase() {
     try {
-      const response = await fetch(chrome.runtime.getURL("profiles.csv"));
-      const csvContent = await response.text();
-
-      console.log("🗄️ Profiles database loaded");
-      console.log("├── Content length:", csvContent.length);
-
-      return parseProfilesCSV(csvContent);
-    } catch (error) {
-      console.error("Error loading profiles database:", error);
-      throw new Error("Impossible de charger la base de données des profils");
+      console.log("🚀 Loading profiles database...");
+      
+      // Vérifier si une mise à jour est nécessaire
+      const needsUpdate = await shouldUpdateProfiles();
+      
+      if (!needsUpdate) {
+        // Utiliser le cache si disponible
+        const cachedProfiles = await loadProfilesFromCache();
+        if (cachedProfiles) {
+          console.log("✅ Using cached profiles");
+          return cachedProfiles;
+        }
+      }
+      
+      // Charger depuis le cloud
+      console.log("☁️ Loading fresh profiles from cloud...");
+      const cloudProfiles = await loadProfilesFromCloud();
+      
+      // Sauvegarder en cache
+      await saveProfilesToCache(cloudProfiles);
+      
+      return cloudProfiles;
+      
+    } catch (cloudError) {
+      console.warn("⚠️ Cloud loading failed, trying cache fallback...");
+      
+      // Fallback vers le cache en cas d'erreur cloud
+      const cachedProfiles = await loadProfilesFromCache();
+      if (cachedProfiles) {
+        console.log("🔄 Using cached profiles as fallback");
+        profileSourceMetadata.fallbackUsed = true;
+        return cachedProfiles;
+      }
+      
+      // Fallback vers le fichier local si disponible
+      try {
+        console.log("🔄 Trying local file fallback...");
+        const response = await fetch(chrome.runtime.getURL("profiles.csv"));
+        if (response.ok) {
+          const csvContent = await response.text();
+          const localProfiles = parseProfilesCSV(csvContent);
+          console.log("✅ Using local file fallback:", localProfiles.length, "profiles");
+          
+          profilesSource = 'local';
+          profileSourceMetadata = {
+            loadedAt: Date.now(),
+            source: 'local',
+            fallbackUsed: true,
+            errorMessage: cloudError.message
+          };
+          
+          return localProfiles;
+        }
+      } catch (localError) {
+        console.log("❌ Local fallback failed:", localError.message);
+      }
+      
+      // Si aucun fallback disponible
+      console.error("❌ No profiles available from any source");
+      throw new Error("Impossible de charger les profils (cloud, cache et local indisponibles)");
     }
   }
+
+  /**
+   * Forcer le rafraîchissement des profils depuis le cloud
+   * @param {boolean} showFeedback - Afficher un feedback à l'utilisateur
+   */
+  async function forceRefreshProfiles(showFeedback = true) {
+    try {
+      // Mettre à jour l'état du bouton de rafraîchissement
+      if (refreshProfilesBtn) {
+        refreshProfilesBtn.disabled = true;
+        refreshProfilesBtn.classList.add('loading');
+        refreshProfilesBtn.title = "Rafraîchissement en cours...";
+      }
+      
+      if (showFeedback) {
+        showStatus("Mise à jour des profils...", "info");
+      }
+      
+      console.log("🔄 Forcing profiles refresh from cloud...");
+      
+      // Vider le cache pour forcer le rechargement
+      await chrome.storage.local.remove([
+        CLOUD_CONFIG.cacheKey,
+        CLOUD_CONFIG.versionKey,
+        CLOUD_CONFIG.lastUpdateKey
+      ]);
+      
+      // Recharger les profils
+      availableProfiles = await loadProfilesFromCloud();
+      
+      // Sauvegarder en cache
+      await saveProfilesToCache(availableProfiles);
+      
+      // Mettre à jour l'interface
+      populateProfileSelect(availableProfiles);
+      
+      if (showFeedback) {
+        showStatus(`✅ Profils mis à jour: ${availableProfiles.length} profils chargés`, "success");
+        setTimeout(() => hideStatus(), 3000);
+      }
+      
+      console.log("✅ Profiles refreshed successfully:", availableProfiles.length, "profiles");
+      
+    } catch (error) {
+      console.error("Error refreshing profiles:", error);
+      
+      if (showFeedback) {
+        showStatus(`Erreur de mise à jour: ${error.message}`, "error");
+      }
+      
+      // Fallback vers le cache en cas d'erreur
+      const cachedProfiles = await loadProfilesFromCache();
+      if (cachedProfiles) {
+        availableProfiles = cachedProfiles;
+        populateProfileSelect(availableProfiles);
+        
+        if (showFeedback) {
+          showStatus("⚠️ Utilisation des profils en cache", "info");
+        }
+      }
+    } finally {
+      // Restaurer l'état du bouton de rafraîchissement
+      if (refreshProfilesBtn) {
+        refreshProfilesBtn.disabled = false;
+        refreshProfilesBtn.classList.remove('loading');
+        refreshProfilesBtn.title = "Rafraîchir les profils depuis le cloud";
+      }
+    }
+  }
+
+  /**
+   * Déclencher automatiquement le rafraîchissement lors de la mise à jour de l'extension
+   * @returns {Promise<boolean>} True si un rafraîchissement a été déclenché
+   */
+  async function checkAndTriggerAutoRefresh() {
+    try {
+      console.log("🔍 Checking for extension update...");
+      
+      // Vérifier si l'extension a été mise à jour via background.js
+      const extensionUpdateCheck = await chrome.storage.local.get(['extensionUpdated', 'updateTimestamp']);
+      
+      if (extensionUpdateCheck.extensionUpdated) {
+        console.log("🔄 Extension update flag detected, forcing refresh...");
+        
+        // Nettoyer le flag de mise à jour
+        await chrome.storage.local.remove(['extensionUpdated', 'updateTimestamp']);
+        
+        // Déclencher le rafraîchissement forcé
+        await forceRefreshProfiles(false);
+        
+        // Afficher un message de mise à jour automatique
+        showStatus("🆕 Profils mis à jour automatiquement après mise à jour de l'extension", "success");
+        setTimeout(() => hideStatus(), 3000);
+        
+        return true;
+      }
+      
+      // Vérifier si une mise à jour est nécessaire (logique existante)
+      const needsUpdate = await shouldUpdateProfiles();
+      
+      if (needsUpdate) {
+        console.log("🔄 Standard update needed, triggering auto-refresh...");
+        
+        // Déclencher le rafraîchissement automatique (sans feedback visuel excessif)
+        await forceRefreshProfiles(false);
+        
+        // Afficher un message discret de mise à jour
+        showStatus("🆕 Profils mis à jour automatiquement", "success");
+        setTimeout(() => hideStatus(), 2000);
+        
+        return true;
+      }
+      
+      console.log("✅ No extension update detected");
+      return false;
+      
+    } catch (error) {
+      console.error("Error during auto-refresh check:", error);
+      return false;
+    }
+  }
+  window.debugCloudProfiles = async function() {
+    console.log("🧪 === DEBUG CLOUD PROFILES ===");
+    console.log("📍 URL:", `${CLOUD_CONFIG.baseUrl}/${CLOUD_CONFIG.profilesFile}`);
+    
+    try {
+      // Test de connectivité
+      console.log("🔄 Testing cloud connectivity...");
+      const testResponse = await fetch(`${CLOUD_CONFIG.baseUrl}/${CLOUD_CONFIG.profilesFile}`, {
+        method: 'HEAD'
+      });
+      console.log("📊 HEAD Status:", testResponse.status, testResponse.statusText);
+      
+      // Test de chargement complet
+      console.log("🔄 Testing full load...");
+      const profiles = await loadProfilesFromCloud();
+      console.log("✅ Profiles loaded:", profiles.length);
+      console.log("📋 First profile:", profiles[0]);
+      
+      return profiles;
+    } catch (error) {
+      console.error("❌ Debug failed:", error);
+      
+      // Test fallback cache
+      console.log("🔄 Testing cache fallback...");
+      const cached = await loadProfilesFromCache();
+      if (cached) {
+        console.log("✅ Cache fallback works:", cached.length, "profiles");
+        return cached;
+      } else {
+        console.log("❌ No cache available");
+      }
+      
+      throw error;
+    }
+  };
 
   /**
    * Parse profiles CSV content and convert to array of profile objects
@@ -447,18 +867,45 @@ document.addEventListener("DOMContentLoaded", function () {
       const profession = profile.professional?.profession || "";
       const company = profile.professional?.company || "";
 
-      let displayText = `[${profile.id}] ${name}`;
+      // Add source indicator to profile name
+      let sourceIcon = '';
+      let sourceText = '';
+      
+      switch (profilesSource) {
+        case 'cloud':
+          sourceIcon = '☁️';
+          sourceText = profileSourceMetadata.fallbackUsed ? ' (Cloud/Fallback)' : ' (Cloud)';
+          option.className = 'cloud-profile';
+          break;
+        case 'cache':
+          sourceIcon = '📦';
+          sourceText = ' (Cache)';
+          option.className = 'cache-profile';
+          break;
+        case 'local':
+          sourceIcon = '📝';
+          sourceText = ' (Local)';
+          option.className = 'local-profile';
+          break;
+        default:
+          sourceIcon = '❓';
+          sourceText = ' (Unknown)';
+      }
+
+      let displayText = `${sourceIcon} [${profile.id}] ${name}`;
       if (profession) {
         displayText += ` - ${profession}`;
       }
+      displayText += sourceText;
 
       option.textContent = displayText;
       option.dataset.profile = JSON.stringify(profile);
+      option.dataset.source = profilesSource;
 
       profileSelect.appendChild(option);
     });
 
-    console.log(`✅ Populated profile selector with ${profiles.length} profiles`);
+    console.log(`✅ Populated profile selector with ${profiles.length} profiles from ${profilesSource}`);
   }
 
   /**
@@ -524,15 +971,83 @@ document.addEventListener("DOMContentLoaded", function () {
 
     profileName.textContent = name;
 
+    // Display profile ID if available
+    if (userData.id) {
+      profileId.textContent = `ID: ${userData.id}`;
+      profileId.style.display = "inline-block";
+    } else {
+      profileId.style.display = "none";
+    }
+
     let details = [];
     if (email) details.push(`📧 ${email}`);
     if (profession) details.push(`💼 ${profession}`);
     if (userData.location?.nationality) details.push(`🌍 ${userData.location.nationality}`);
 
     profileDetails.innerHTML = details.join("<br>");
+    
+    // Apply source-specific styling to the profile display
+    userProfileDisplay.className = 'user-profile';
+    if (currentMode === 'profiles') {
+      switch (profilesSource) {
+        case 'cloud':
+          userProfileDisplay.classList.add('cloud-source');
+          break;
+        case 'cache':
+          userProfileDisplay.classList.add('cache-source');
+          break;
+        case 'local':
+          userProfileDisplay.classList.add('local-source');
+          break;
+      }
+    } else if (currentMode === 'csv' && profilesSource === 'csv-upload') {
+      userProfileDisplay.classList.add('csv-upload-source');
+    }
+    
+    // Add source badge to profile header
+    const profileHeaderSpan = document.querySelector('.profile-header span:first-child');
+    if (profileHeaderSpan) {
+      // Remove existing badge
+      const existingBadge = profileHeaderSpan.querySelector('.profile-source-badge');
+      if (existingBadge) {
+        existingBadge.remove();
+      }
+      
+      // Add new source badge
+      const badge = document.createElement('span');
+      let badgeClass = '';
+      let badgeText = '';
+      
+      if (currentMode === 'profiles') {
+        badgeClass = `profile-source-badge ${profilesSource}`;
+        switch (profilesSource) {
+          case 'cloud':
+            badgeText = profileSourceMetadata.fallbackUsed ? 'CLOUD*' : 'CLOUD';
+            break;
+          case 'cache':
+            badgeText = 'CACHE';
+            break;
+          case 'local':
+            badgeText = 'LOCAL';
+            break;
+          default:
+            badgeText = '?';
+        }
+      } else if (currentMode === 'csv' && profilesSource === 'csv-upload') {
+        badgeClass = 'profile-source-badge csv-upload';
+        badgeText = 'CSV';
+      }
+      
+      if (badgeText) {
+        badge.className = badgeClass;
+        badge.textContent = badgeText;
+        profileHeaderSpan.appendChild(badge);
+      }
+    }
+    
     userProfileDisplay.style.display = "block";
 
-    console.log("✅ Profile display updated");
+    console.log("✅ Profile display updated with source:", profilesSource);
   }
 
   /**
@@ -663,6 +1178,15 @@ document.addEventListener("DOMContentLoaded", function () {
         if (userData) {
           currentUserData = userData;
           console.log("✅ CSV parsed successfully:", userData);
+
+          // Set source for CSV upload
+          profilesSource = 'csv-upload';
+          profileSourceMetadata = {
+            loadedAt: Date.now(),
+            source: 'csv-upload',
+            fallbackUsed: false,
+            errorMessage: null
+          };
 
           // Update profile display
           updateProfileDisplay(userData);
@@ -856,30 +1380,31 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log("Results:", response.results);
 
         // Update UI with results - note: response.results should be the stats object
-        if (response.results && response.results.detectionResults) {
-          updateStats(response.results.detectionResults);
-          showResults(response.results.detectionResults);
-        } else if (Array.isArray(response.results)) {
-          updateStats(response.results);
-          showResults(response.results);
-        }
-
-        const filledCount = Array.isArray(response.results)
-          ? response.results.filter((r) => r.matched).length
-          : response.results.fieldsFilled || 0;
-
-        // Create success message including button click information
-        let successMessage = `Formulaire rempli avec succès! ${filledCount} champs remplis`;
+        let resultsData = null;
+        let filledCount = 0;
         
-        // Add button click information if available
-        if (response.results && response.results.buttonClickResult) {
-          const buttonResult = response.results.buttonClickResult;
-          if (buttonResult.success) {
-            successMessage += ` - Bouton "Ajouter un fichier" cliqué automatiquement ✓`;
-          } else if (buttonResult.totalFound > 0) {
-            successMessage += ` - ${buttonResult.totalFound} bouton(s) "Ajouter un fichier" trouvé(s) mais non cliqué(s)`;
-          }
+        if (response.results && response.results.detectionResults) {
+          resultsData = response.results.detectionResults;
+        } else if (Array.isArray(response.results)) {
+          resultsData = response.results;
         }
+        
+        if (resultsData) {
+          // Optimisation: traitement avec debouncing
+          updateResultsDebounced(resultsData);
+          
+          // Calculer filledCount en une seule passe
+          for (let i = 0; i < resultsData.length; i++) {
+            if (resultsData[i].matched) {
+              filledCount++;
+            }
+          }
+        } else {
+          filledCount = response.results.fieldsFilled || 0;
+        }
+
+        // Create success message
+        let successMessage = `Formulaire rempli avec succès! ${filledCount} champs remplis`;
 
         showStatus(successMessage, "success");
       } else {
@@ -902,54 +1427,112 @@ document.addEventListener("DOMContentLoaded", function () {
    */
   function updateStats(results) {
     const totalFields = results.length;
-    const unfilledFields = results.filter((result) => !result.matched).length;
-    const filledFields = results.filter((result) => result.matched).length;
+    let unfilledFields = 0;
+    let filledFields = 0;
+    
+    // Optimisation: une seule itération au lieu de 3 filter()
+    for (let i = 0; i < totalFields; i++) {
+      if (results[i].matched) {
+        filledFields++;
+      } else {
+        unfilledFields++;
+      }
+    }
 
+    // Mise à jour en batch pour éviter les reflows multiples
     fieldsDetectedSpan.textContent = totalFields;
     fieldsUnfilledSpan.textContent = unfilledFields;
     fieldsFilledSpan.textContent = filledFields;
 
     statsDiv.style.display = "block";
+    
+    // Auto-close popup logic based on unfilled fields count
+    console.log(`📊 Unfilled fields count: ${unfilledFields}`);
+    
+    if (unfilledFields === 2) {
+      console.log('🔄 Auto-closing popup immediately (unfilled count = 2)');
+      window.close();
+    } else if (unfilledFields > 2) {
+      console.log(`🔄 Auto-closing popup in 2 seconds (unfilled count = ${unfilledFields})`);
+      setTimeout(() => {
+        console.log('🔄 Executing delayed popup close');
+        window.close();
+      }, 2000);
+    }
   }
 
   /**
-   * Show detailed results
+   * Show detailed results with virtualization for large datasets
    * @param {Array} results - Array of field fill results
    */
   function showResults(results) {
-    resultsDiv.innerHTML = "";
-
-    const unfilledResults = results.filter((result) => !result.matched);
-
-    // Header: Champ | Type
+    // Optimisation: utiliser DocumentFragment pour éviter les reflows
+    const fragment = document.createDocumentFragment();
+    
+    // Header: Type seulement
     const header = document.createElement("div");
     header.className = "results-header";
-    header.innerHTML = `<div>Champ</div><div>Type</div>`;
-    resultsDiv.appendChild(header);
+    header.innerHTML = `<div>Type de champ</div>`;
+    fragment.appendChild(header);
+
+    // Filtrer et traiter en une seule passe
+    const unfilledResults = [];
+    for (let i = 0; i < results.length; i++) {
+      if (!results[i].matched) {
+        unfilledResults.push(results[i]);
+      }
+    }
+
+    // Virtualisation pour les grandes listes (>20 éléments)
+    const maxDisplayItems = 20;
+    const itemsToShow = unfilledResults.length > maxDisplayItems 
+      ? unfilledResults.slice(0, maxDisplayItems) 
+      : unfilledResults;
 
     // Only show unfilled fields
-    if (unfilledResults.length > 0) {
-      unfilledResults.forEach((result) => {
+    if (itemsToShow.length > 0) {
+      for (let i = 0; i < itemsToShow.length; i++) {
+        const result = itemsToShow[i];
         const item = document.createElement("div");
         item.className = "result-item error";
-        const question = result.questionLabel || result.field || "(inconnu)";
-        const type = result.fieldCategory || result.inputType || "-";
-        item.innerHTML = `
-          <div class="result-text">${question}</div>
-          <div class="result-text">${type}</div>
-        `;
-        resultsDiv.appendChild(item);
-      });
+        const type = result.fieldCategory || result.inputType || "Champ inconnu";
+        
+        // Optimisation: créer l'élément directement
+        const typeDiv = document.createElement("div");
+        typeDiv.className = "result-text";
+        typeDiv.textContent = type;
+        
+        item.appendChild(typeDiv);
+        fragment.appendChild(item);
+      }
+      
+      // Afficher info de troncature si nécessaire
+      if (unfilledResults.length > maxDisplayItems) {
+        const moreItem = document.createElement("div");
+        moreItem.className = "result-item info";
+        
+        const moreDiv = document.createElement("div");
+        moreDiv.className = "result-text";
+        moreDiv.textContent = `... et ${unfilledResults.length - maxDisplayItems} autres champs`;
+        
+        moreItem.appendChild(moreDiv);
+        fragment.appendChild(moreItem);
+      }
     } else {
       const item = document.createElement("div");
       item.className = "result-item success";
-      item.innerHTML = `
-        <div class="result-text">Tous les champs supportés</div>
-        <div class="result-text">-</div>
-      `;
-      resultsDiv.appendChild(item);
+      
+      const successDiv = document.createElement("div");
+      successDiv.className = "result-text";
+      successDiv.textContent = "Tous les champs supportés";
+      
+      item.appendChild(successDiv);
+      fragment.appendChild(item);
     }
 
+    // Une seule manipulation DOM
+    resultsDiv.innerHTML = "";
+    resultsDiv.appendChild(fragment);
     resultsDiv.style.display = "block";
   }
 
@@ -970,6 +1553,9 @@ document.addEventListener("DOMContentLoaded", function () {
     // Keep popup open during operations
     keepPopupOpen();
 
+    // Vérifier et déclencher le rafraîchissement automatique si nécessaire
+    await checkAndTriggerAutoRefresh();
+
     // Initialize profiles mode by default
     await initializeProfilesMode();
 
@@ -986,6 +1572,14 @@ document.addEventListener("DOMContentLoaded", function () {
       handleProfileSelection(e.target.value);
     });
 
+    // Add refresh profiles button handler
+    if (refreshProfilesBtn) {
+      refreshProfilesBtn.addEventListener("click", () => {
+        console.log("🔄 Refresh profiles button clicked");
+        forceRefreshProfiles(true);
+      });
+    }
+
     // Add CSV file input handler
     csvFileInput.addEventListener("change", handleCSVFile);
 
@@ -1000,4 +1594,60 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Initialize the popup
   initialize();
+
+  // Exposer les fonctions utilitaires pour le debug et le rafraîchissement manuel
+  /**
+   * Fonction exposée pour forcer le rafraîchissement depuis la console
+   * Accessible depuis la console : window.forceRefreshProfiles()
+   */
+  window.forceRefreshProfiles = async function() {
+    console.log("🔄 === FORCE REFRESH PROFILES (MANUAL) ===");
+    await forceRefreshProfiles(true);
+  };
+
+  /**
+   * Fonction pour obtenir les informations sur la source des profils
+   * Accessible depuis la console : window.getProfilesSourceInfo()
+   */
+  window.getProfilesSourceInfo = function() {
+    console.log("📊 === PROFILES SOURCE INFO ===");
+    console.log("├── Current source:", profilesSource);
+    console.log("├── Metadata:", profileSourceMetadata);
+    console.log("├── Available profiles:", availableProfiles.length);
+    console.log("└── Cloud status:", cloudProfilesStatus);
+    return {
+      source: profilesSource,
+      metadata: profileSourceMetadata,
+      profilesCount: availableProfiles.length,
+      cloudStatus: cloudProfilesStatus
+    };
+  };
+
+  // Exposer les fonctions utilitaires pour le debug et le rafraîchissement manuel
+  /**
+   * Fonction exposée pour forcer le rafraîchissement depuis la console
+   * Accessible depuis la console : window.forceRefreshProfiles()
+   */
+  window.forceRefreshProfiles = async function() {
+    console.log("🔄 === FORCE REFRESH PROFILES (MANUAL) ===");
+    await forceRefreshProfiles(true);
+  };
+
+  /**
+   * Fonction pour obtenir les informations sur la source des profils
+   * Accessible depuis la console : window.getProfilesSourceInfo()
+   */
+  window.getProfilesSourceInfo = function() {
+    console.log("📊 === PROFILES SOURCE INFO ===");
+    console.log("├── Current source:", profilesSource);
+    console.log("├── Metadata:", profileSourceMetadata);
+    console.log("├── Available profiles:", availableProfiles.length);
+    console.log("└── Cloud status:", cloudProfilesStatus);
+    return {
+      source: profilesSource,
+      metadata: profileSourceMetadata,
+      profilesCount: availableProfiles.length,
+      cloudStatus: cloudProfilesStatus
+    };
+  };
 });

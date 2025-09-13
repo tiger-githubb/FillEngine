@@ -4,8 +4,20 @@
  */
 
 // Initialize extension when installed
-chrome.runtime.onInstalled.addListener(() => {
-  console.log("Auto-Fill Google Forms extension installed");
+chrome.runtime.onInstalled.addListener((details) => {
+  console.log("Auto-Fill Google Forms extension installed", details);
+  
+  // Déclencher le rafraîchissement des profils lors de l'installation/mise à jour
+  if (details.reason === 'install') {
+    console.log("🆕 Extension installed - profiles will refresh on first popup open");
+  } else if (details.reason === 'update') {
+    console.log("🔄 Extension updated - profiles will auto-refresh on next popup open");
+    // Marquer qu'une mise à jour a eu lieu pour le popup
+    chrome.storage.local.set({
+      extensionUpdated: true,
+      updateTimestamp: Date.now()
+    });
+  }
 });
 
 // Handle messages from popup or content script

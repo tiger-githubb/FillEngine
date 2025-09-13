@@ -45,6 +45,155 @@ function injectHighlightStyles() {
 // Inject styles immediately when content script loads
 injectHighlightStyles();
 
+// DEBUG: Add manual test function for file upload detection
+window.testFileUploadDetection = function() {
+	console.log('🧪 Testing file upload detection manually...');
+	console.log('Available selectors:', CONFIG.fileUploadSelectors);
+	
+	const containers = FormDetector.findQuestionContainers();
+	console.log(`Found ${containers.length} containers:`, containers);
+	
+	containers.forEach((container, index) => {
+		const questionLabel = FormDetector.extractQuestionLabel(container);
+		const inputField = FormDetector.findInputField(container);
+		const isFileUpload = inputField && inputField.dataset && inputField.dataset.fieldType === 'fileupload';
+		
+		console.log(`Container ${index}:`, {
+			questionLabel,
+			inputField,
+			isFileUpload,
+			fieldType: inputField?.dataset?.fieldType,
+			container
+		});
+		
+		// Check each selector manually
+		CONFIG.fileUploadSelectors.forEach((selector, selectorIndex) => {
+			const element = container.querySelector(selector);
+			if (element) {
+				console.log(`  ✅ Selector ${selectorIndex + 1} ("${selector}") found element:`, element);
+				const isVisible = FormDetector.isElementVisible(element);
+				console.log(`  Visible: ${isVisible}`);
+			} else {
+				console.log(`  ❌ Selector ${selectorIndex + 1} ("${selector}") found nothing`);
+			}
+		});
+		
+		if (isFileUpload) {
+			console.log('🎯 File upload field detected!', {
+				question: questionLabel,
+				element: inputField,
+				expectedType: inputField.dataset.expectedFileType
+			});
+		}
+	});
+	
+	// Also test the direct detection method
+	if (autoFiller && autoFiller.detectFileUploadFieldsDirectly) {
+		console.log('⚙️ Testing direct file upload detection...');
+		const directResults = autoFiller.detectFileUploadFieldsDirectly();
+		console.log(`Direct detection found ${directResults.length} file upload fields:`, directResults);
+	}
+	
+	return { containers, total: containers.length };
+};
+
+// DEBUG: Simple test for "Ajouter un fichier" detection
+window.testSimpleFileUploadDetection = function() {
+	console.log('🔍 Simple test: Looking for "Ajouter un fichier" in div[role="listitem"]...');
+	
+	// Find all div[role="listitem"] containers
+	const containers = document.querySelectorAll('div[role="listitem"]');
+	console.log(`Found ${containers.length} div[role="listitem"] containers`);
+	
+	containers.forEach((container, index) => {
+		console.log(`\nContainer ${index + 1}:`);
+		console.log('  Container:', container);
+		
+		// Check if container contains "Ajouter un fichier" text
+		const hasAjouterText = container.textContent.includes('Ajouter un fichier');
+		console.log(`  Contains "Ajouter un fichier": ${hasAjouterText}`);
+		
+		if (hasAjouterText) {
+			// Find the exact element with the text
+			const allElements = container.querySelectorAll('*');
+			for (const element of allElements) {
+				if (element.textContent && element.textContent.includes('Ajouter un fichier')) {
+					console.log('  ✅ Found element with text:', element);
+					console.log('    Element tag:', element.tagName);
+					console.log('    Element role:', element.getAttribute('role'));
+					console.log('    Element class:', element.className);
+					console.log('    Element visible:', FormDetector.isElementVisible(element));
+					
+					// Check if parent has role="button"
+					const buttonParent = element.closest('[role="button"]');
+					if (buttonParent) {
+						console.log('    Button parent found:', buttonParent);
+						console.log('    Button visible:', FormDetector.isElementVisible(buttonParent));
+					}
+					break;
+				}
+			}
+			
+			// Try to get question label
+			const questionLabel = FormDetector.extractQuestionLabel(container);
+			console.log(`  Question label: "${questionLabel}"`);
+		}
+	});
+	
+	return {
+		totalContainers: containers.length,
+		fileUploadContainers: Array.from(containers).filter(c => c.textContent.includes('Ajouter un fichier')).length
+	};
+};
+
+// DEBUG: Add manual test function for highlighting
+window.testHighlighting = function() {
+	console.log('🧪 Testing highlighting manually...');
+	
+	if (!autoFiller) {
+		console.error('❌ AutoFiller not available');
+		return;
+	}
+	
+	// First, simulate form processing to populate detection results
+	const containers = FormDetector.findQuestionContainers();
+	containers.forEach((container, index) => {
+		const questionLabel = FormDetector.extractQuestionLabel(container);
+		const inputField = FormDetector.findInputField(container);
+		
+		if (questionLabel && inputField) {
+			let fieldCategory = 'other';
+			if (inputField.dataset && inputField.dataset.fieldType === 'fileupload') {
+				fieldCategory = 'fileupload';
+			}
+			
+			// Add to detection results if not already there
+			const existingResult = autoFiller.statistics.detectionResults.find(
+				r => r.questionLabel === questionLabel
+			);
+			
+			if (!existingResult) {
+				autoFiller.statistics.detectionResults.push({
+					questionLabel,
+					matched: false,
+					key: fieldCategory,
+					value: 'Test field',
+					inputType: fieldCategory,
+					fieldCategory: fieldCategory,
+					hasInputField: true
+				});
+				console.log(`Added test result for: ${questionLabel} (${fieldCategory})`);
+			}
+		}
+	});
+	
+	// Now test highlighting
+	const result = autoFiller.highlightUnfilledFields();
+	console.log('Highlighting result:', result);
+	
+	return result;
+};
+
 // Enhanced global error handlers to prevent external script interference
 // Store original handlers before we override them
 const originalWindowError = window.onerror;
@@ -113,81 +262,6 @@ window.addEventListener('unhandledrejection', function(event) {
 	}
 }, true); // Use capture phase to catch rejections early
 
-// Function to find and report "ajouter un fichier" buttons
-function findAjouterFichierButtons() {
-	console.log('🔍 [AutoFill] Searching for "ajouter un fichier" buttons...');
-	
-	// Selectors for file upload buttons
-	const selectors = [
-		'div[role="button"][aria-label*="Ajouter un fichier"]',
-		'div[role="button"][aria-label*="ajouter un fichier"]',
-		'button[aria-label*="Ajouter un fichier"]',
-		'button[aria-label*="ajouter un fichier"]',
-		'div[role="button"][aria-label*="Add file"]',
-		'button[aria-label*="Add file"]',
-		'[aria-label*="Ajouter un fichier"]',
-		'[aria-label*="Add file"]'
-	];
-	
-	let totalFound = 0;
-	
-	selectors.forEach((selector, index) => {
-		try {
-			const elements = document.querySelectorAll(selector);
-			console.log(`📎 Selector ${index + 1}: "${selector}" - Found ${elements.length} elements`);
-			
-			elements.forEach((element, elemIndex) => {
-				const ariaLabel = element.getAttribute('aria-label');
-				const tagName = element.tagName.toLowerCase();
-				const role = element.getAttribute('role');
-				const isVisible = element.offsetWidth > 0 && element.offsetHeight > 0;
-				
-				console.log(`  📌 Element ${elemIndex + 1}:`, {
-					tagName: tagName,
-					role: role,
-					ariaLabel: ariaLabel,
-					isVisible: isVisible,
-					classes: element.className,
-					boundingRect: element.getBoundingClientRect()
-				});
-				
-				// Find the question container
-				const container = element.closest('[role="listitem"], .freebirdFormviewerViewItemsItemItem, .m2, .geS5n');
-				if (container) {
-					const questionText = container.querySelector('[role="heading"], .M7eMe, .freebirdFormviewerViewItemsItemItemTitle');
-					if (questionText) {
-						console.log(`    📝 Question: "${questionText.textContent.trim()}"`);
-					}
-				}
-				
-				totalFound++;
-			});
-		} catch (error) {
-			console.error(`❌ Error with selector "${selector}":`, error);
-		}
-	});
-	
-	console.log(`📊 [AutoFill] Total "ajouter un fichier" buttons found: ${totalFound}`);
-	
-	// Also check for file input elements
-	const fileInputs = document.querySelectorAll('input[type="file"]');
-	console.log(`📁 [AutoFill] Regular file inputs found: ${fileInputs.length}`);
-	fileInputs.forEach((input, index) => {
-		console.log(`  📂 File input ${index + 1}:`, {
-			id: input.id,
-			name: input.name,
-			accept: input.accept,
-			multiple: input.multiple,
-			isVisible: input.offsetWidth > 0 && input.offsetHeight > 0
-		});
-	});
-	
-	return totalFound;
-}
-
-// Expose function globally for easy testing
-window.findAjouterFichierButtons = findAjouterFichierButtons;
-
 // Detect page type and initialize autofiller
 console.log("[AutoFill] Content init script loaded");
 // Ensure Logger binding exists even if Logger.js didn't load for any reason
@@ -209,8 +283,8 @@ console.log("[AutoFill] Diagnostics:", {
 	hasCONFIG: typeof CONFIG !== "undefined",
 	hasDetect: typeof detectPageTypeAndAdaptConfig,
 	hasFormAutoFiller: typeof FormAutoFiller,
-	hasFileUploadHandler: typeof FileUploadHandler !== "undefined",
-	hasFileUploadModalHandler: typeof FileUploadModalHandler !== "undefined",
+	hasFormDetector: typeof FormDetector !== "undefined",
+	hasFieldFiller: typeof FieldFiller !== "undefined",
 });
 
 let pageType = "unknown";
@@ -235,11 +309,6 @@ try {
 		Logger.debug("Available field mappings:", autoFiller.getFieldMappings());
 	}
 	Logger.info("Extension ready. Upload CSV data to begin form filling.");
-	
-	// Search for "ajouter un fichier" buttons and report in console
-	setTimeout(() => {
-		findAjouterFichierButtons();
-	}, 2000); // Wait 2 seconds for page to fully load
 	
 } catch (e) {
 	console.error("[AutoFill] Logger not available:", e);
