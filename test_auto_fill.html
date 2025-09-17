@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test du Remplissage Automatique - FillEngine</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background: #f9fafb;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #1a202c;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+        
+        .feature {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .feature h3 {
+            color: #2d3748;
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        
+        .code {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Consolas', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .steps {
+            background: #edf2f7;
+            border-left: 4px solid #4299e1;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .steps li {
+            margin-bottom: 8px;
+        }
+        
+        .alert {
+            background: #fed7d7;
+            border: 1px solid #feb2b2;
+            color: #742a2a;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #c6f6d5;
+            border: 1px solid #9ae6b4;
+            color: #22543d;
+        }
+        
+        .info {
+            background: #bee3f8;
+            border: 1px solid #90cdf4;
+            color: #2a4365;
+        }
+        
+        .scenarios {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .scenario {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 15px;
+        }
+        
+        .scenario h4 {
+            margin-top: 0;
+            color: #2d3748;
+        }
+        
+        @media (max-width: 768px) {
+            .scenarios {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Test du Remplissage Automatique</h1>
+        
+        <div class="alert info">
+            <strong>🚀 Nouvelle Fonctionnalité :</strong> L'extension peut maintenant remplir automatiquement les formulaires Google Forms dès leur ouverture, en utilisant les données en cache local (dernier profil sélectionné ou CSV chargé). Le remplissage se fait immédiatement au chargement de la page.
+        </div>
+
+        <div class="feature">
+            <h3>✨ Fonctionnalités Automatiques</h3>
+            <ul>
+                <li><strong>Détection automatique</strong> : L'extension détecte automatiquement les pages Google Forms</li>
+                <li><strong>Chargement des données</strong> : Utilise automatiquement le dernier profil ou CSV utilisé</li>
+                <li><strong>Remplissage intelligent</strong> : Remplit les champs compatible automatiquement</li>
+                <li><strong>Notification discrète</strong> : Affiche une notification du succès du remplissage</li>
+                <li><strong>Contrôle utilisateur</strong> : Option pour activer/désactiver le remplissage automatique</li>
+            </ul>
+        </div>
+
+        <div class="feature">
+            <h3>🎯 Comment Tester</h3>
+            
+            <div class="steps">
+                <h4>Test 1: Remplissage Automatique avec Profil</h4>
+                <ol>
+                    <li>Ouvrez l'extension FillEngine</li>
+                    <li>Sélectionnez un profil dans la liste</li>
+                    <li>Vérifiez que "Remplissage automatique" est activé ✅</li>
+                    <li>Ouvrez un nouveau formulaire Google Forms</li>
+                    <li>🎉 Les champs devraient se remplir automatiquement immédiatement !</li>
+                    <li>Une notification verte devrait apparaître en haut à droite</li>
+                </ol>
+            </div>
+
+            <div class="steps">
+                <h4>Test 2: Remplissage Automatique avec CSV</h4>
+                <ol>
+                    <li>Ouvrez l'extension FillEngine</li>
+                    <li>Passez en mode "Upload CSV"</li>
+                    <li>Chargez un fichier CSV avec vos données</li>
+                    <li>Vérifiez que "Remplissage automatique" est activé ✅</li>
+                    <li>Ouvrez un nouveau formulaire Google Forms</li>
+                    <li>🎉 Les champs devraient se remplir automatiquement immédiatement !</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="feature">
+            <h3>⚙️ Paramètres de Contrôle</h3>
+            <p>Une nouvelle section "Remplissage automatique" est maintenant disponible dans l'interface :</p>
+            
+            <div class="code">
+☑️ Remplissage automatique
+   Remplir automatiquement les formulaires au chargement
+            </div>
+            
+            <ul>
+                <li><strong>Activé</strong> : Les formulaires se remplissent automatiquement</li>
+                <li><strong>Désactivé</strong> : Remplissage manuel uniquement (comportement normal)</li>
+                <li><strong>Persistant</strong> : Le paramètre est sauvegardé entre les sessions</li>
+            </ul>
+        </div>
+
+        <div class="feature">
+            <h3>🔍 Indicateurs Visuels</h3>
+            
+            <div class="scenarios">
+                <div class="scenario">
+                    <h4>📱 Notification de Succès</h4>
+                    <p>Après le remplissage automatique :</p>
+                    <div class="code">
+🤖 FillEngine
+Rempli X/Y champs automatiquement
+                    </div>
+                    <ul>
+                        <li>Apparaît en haut à droite</li>
+                        <li>Disparaît automatiquement après 5s</li>
+                        <li>Cliquable pour fermer manuellement</li>
+                    </ul>
+                </div>
+                
+                <div class="scenario">
+                    <h4>📊 Logs de Console</h4>
+                    <p>Dans les outils de développeur (F12) :</p>
+                    <div class="code">
+[AutoFill] 🚀 Starting automatic form filling...
+[AutoFill] ✅ Automatic filling completed successfully!
+├── Filled 8/12 fields
+├── Success rate: 67%
+└── File uploads: 2
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="feature">
+            <h3>🧪 Tests Avancés</h3>
+            
+            <div class="steps">
+                <h4>Test de Désactivation</h4>
+                <ol>
+                    <li>Dans l'extension, décochez "Remplissage automatique"</li>
+                    <li>Ouvrez un nouveau formulaire Google Forms</li>
+                    <li>Vérifiez qu'aucun remplissage automatique n'a lieu</li>
+                    <li>Le bouton "Remplir le formulaire" doit toujours fonctionner manuellement</li>
+                </ol>
+            </div>
+
+            <div class="steps">
+                <h4>Test de Persistance</h4>
+                <ol>
+                    <li>Fermez complètement Chrome</li>
+                    <li>Rouvrez Chrome et l'extension</li>
+                    <li>Vérifiez que le paramètre "Remplissage automatique" est conservé</li>
+                    <li>Ouvrez un formulaire pour tester le comportement</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="feature">
+            <h3>🛠️ Debug et Dépannage</h3>
+            
+            <div class="alert">
+                <strong>Si le remplissage automatique ne fonctionne pas :</strong>
+                <ol>
+                    <li>Vérifiez que vous êtes sur une page <code>docs.google.com/forms</code></li>
+                    <li>Ouvrez la console (F12) et recherchez les messages <code>[AutoFill]</code></li>
+                    <li>Vérifiez qu'un profil ou CSV est bien sélectionné/chargé</li>
+                    <li>Assurez-vous que "Remplissage automatique" est activé</li>
+                    <li>Le remplissage se fait immédiatement au chargement de la page</li>
+                </ol>
+            </div>
+
+            <p><strong>Messages de debug utiles :</strong></p>
+            <div class="code">
+// Données disponibles pour auto-fill
+[AutoFill] ✅ Found cached profile for auto-fill: USER123
+[AutoFill] ✅ Found cached CSV data for auto-fill
+
+// Démarrage du processus
+[AutoFill] 🚀 Starting automatic form filling...
+├── Found 12 form containers
+├── Using saved data from: USER123
+└── Page type: google-forms
+
+// Résultats
+[AutoFill] ✅ Automatic filling completed successfully!
+[AutoFill] 📢 Auto-fill notification displayed
+            </div>
+        </div>
+
+        <div class="success alert">
+            <strong>🎉 Test Réussi :</strong> Si vous voyez la notification de remplissage automatique et que les champs sont remplis sans cliquer sur le bouton, la fonctionnalité fonctionne parfaitement !
+        </div>
+    </div>
+</body>
+</html>
