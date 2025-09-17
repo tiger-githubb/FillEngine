@@ -51,7 +51,7 @@ document.addEventListener("DOMContentLoaded", function () {
     versionKey: "profilesVersion",
     lastUpdateKey: "profilesLastUpdate",
     // Cache expiration: 24 heures en millisecondes
-    cacheExpiration: 24 * 60 * 60 * 1000
+    cacheExpiration: 7 * 24 * 60 * 60 * 1000
   };
 
   // Current user data (will be updated when CSV is loaded or profile selected)
