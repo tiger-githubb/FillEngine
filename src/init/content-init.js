@@ -262,6 +262,47 @@ window.addEventListener('unhandledrejection', function(event) {
 	}
 }, true); // Use capture phase to catch rejections early
 
+/**
+ * Nettoyage des resources lors du déchargement de la page
+ */
+function cleanup() {
+	if (googleFormsObserver) {
+		googleFormsObserver.disconnect();
+		googleFormsObserver = null;
+		Logger.info('🧹 Google Forms observer cleaned up');
+	}
+	
+	if (autoFillTimeout) {
+		clearTimeout(autoFillTimeout);
+		autoFillTimeout = null;
+		Logger.info('🧹 Auto-fill timeout cleared');
+	}
+	
+	// Reset flags
+	isPageReady = false;
+	hasTriggeredAutoFill = false;
+}
+
+// Nettoyage lors du déchargement
+window.addEventListener('beforeunload', cleanup);
+window.addEventListener('unload', cleanup);
+
+// Nettoyage lors de la navigation SPA (Single Page Application)
+window.addEventListener('popstate', () => {
+	Logger.info('🔄 Navigation detected, resetting auto-fill state');
+	hasTriggeredAutoFill = false;
+	const newPageType = detectPageTypeAndAdaptConfig();
+	if (newPageType !== pageType) {
+		pageType = newPageType;
+		Logger.info(`📄 Page type changed to: ${pageType}`);
+		if (pageType === 'google-forms') {
+			setupGoogleFormsObserver();
+		} else {
+			cleanup();
+		}
+	}
+});
+
 // Detect page type and initialize autofiller
 console.log("[AutoFill] Content init script loaded");
 // Ensure Logger binding exists even if Logger.js didn't load for any reason
@@ -314,28 +355,102 @@ try {
 	console.error("[AutoFill] Logger not available:", e);
 }
 
-// Observe DOM changes
-const observer = new MutationObserver((mutations) => {
-	let shouldCheck = false;
-	mutations.forEach((mutation) => {
-		if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
-			for (const node of mutation.addedNodes) {
-				if (node.nodeType === Node.ELEMENT_NODE) {
-					const hasFormElements = node.querySelector && node.querySelector("input, textarea");
-					if (hasFormElements) {
-						shouldCheck = true;
-						break;
+// Enhanced Google Forms detection with immediate response
+let googleFormsObserver = null;
+let autoFillTimeout = null;
+let isPageReady = false;
+let hasTriggeredAutoFill = false;
+
+/**
+ * Advanced MutationObserver for Google Forms question injection
+ */
+function setupGoogleFormsObserver() {
+	if (googleFormsObserver) {
+		googleFormsObserver.disconnect();
+	}
+
+	googleFormsObserver = new MutationObserver((mutations) => {
+		let shouldTriggerAutoFill = false;
+		let newGoogleFormsElements = false;
+
+		mutations.forEach((mutation) => {
+			if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
+				for (const node of mutation.addedNodes) {
+					if (node.nodeType === Node.ELEMENT_NODE) {
+						// Détection spécifique Google Forms
+						const isGoogleFormsQuestion = 
+							node.matches && (
+								node.matches('[role="listitem"]') ||
+								node.matches('.freebirdFormviewerViewItemsItemItem') ||
+								node.matches('.geS5n') ||
+								node.matches('.m2') ||
+								node.matches('.Xb9hP') ||
+								node.matches('.AgroKb')
+							) ||
+							node.querySelector && (
+								node.querySelector('[role="listitem"]') ||
+								node.querySelector('.freebirdFormviewerViewItemsItemItem') ||
+								node.querySelector('.geS5n') ||
+								node.querySelector('.m2') ||
+								node.querySelector('.Xb9hP') ||
+								node.querySelector('.AgroKb')
+							);
+
+						if (isGoogleFormsQuestion) {
+							newGoogleFormsElements = true;
+							Logger.info("🎯 Google Forms question element detected via MutationObserver");
+						}
+
+						// Détection générale d'éléments de formulaire
+						const hasFormElements = node.querySelector && (
+							node.querySelector("input, textarea, select") ||
+							node.querySelector('[role="radio"], [role="checkbox"], [role="listbox"]')
+						);
+
+						if (hasFormElements || isGoogleFormsQuestion) {
+							shouldTriggerAutoFill = true;
+						}
 					}
 				}
 			}
+		});
+
+		// Déclenchement immédiat si nouvelles questions détectées
+		if (newGoogleFormsElements && isPageReady && !hasTriggeredAutoFill) {
+			Logger.info("⚡ Immediate auto-fill trigger due to Google Forms question injection");
+			triggerDelayedAutoFill(500); // Délai court pour laisser le DOM se stabiliser
+		} else if (shouldTriggerAutoFill) {
+			Logger.info("📝 Form elements detected, scheduling potential auto-fill");
+			triggerDelayedAutoFill(1500); // Délai plus long pour les autres éléments
 		}
 	});
-	if (shouldCheck) {
-		Logger.info("DOM updated with new form elements");
-	}
-});
 
-observer.observe(document.body, { childList: true, subtree: true });
+	// Observer avec options optimisées pour Google Forms
+	googleFormsObserver.observe(document.body, {
+		childList: true,
+		subtree: true,
+		attributes: true,
+		attributeFilter: ['role', 'class', 'data-params']
+	});
+
+	Logger.info("🔍 Enhanced Google Forms MutationObserver initialized");
+}
+
+/**
+ * Déclenche l'auto-fill avec un délai pour éviter les déclenchements multiples
+ */
+function triggerDelayedAutoFill(delay = 1000) {
+	if (autoFillTimeout) {
+		clearTimeout(autoFillTimeout);
+	}
+
+	autoFillTimeout = setTimeout(() => {
+		if (pageType === 'google-forms' && isPageReady && !hasTriggeredAutoFill) {
+			Logger.info("🚀 Triggering delayed auto-fill after DOM changes");
+			performAutoFill();
+		}
+	}, delay);
+}
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 	console.log("📥 CONTENT SCRIPT RECEIVED MESSAGE:", message);
@@ -499,6 +614,12 @@ async function loadSavedUserData() {
  */
 async function performAutoFill() {
 	try {
+		// Éviter les déclenchements multiples
+		if (hasTriggeredAutoFill) {
+			console.log('[AutoFill] Auto-fill already triggered, skipping');
+			return;
+		}
+
 		// Only auto-fill on Google Forms pages
 		if (pageType !== 'google-forms') {
 			console.log('[AutoFill] Auto-fill skipped: Not a Google Forms page');
@@ -518,10 +639,14 @@ async function performAutoFill() {
 			console.log('[AutoFill] Auto-fill skipped: No form elements found');
 			return;
 		}
+
+		// Marquer comme déclenché pour éviter les duplicatas
+		hasTriggeredAutoFill = true;
 		
 		console.log('[AutoFill] 🚀 Starting automatic form filling...');
 		console.log('├── Found', containers.length, 'form containers');
 		console.log('├── Using saved data from:', savedUserData.id || 'CSV upload');
+		console.log('├── Triggered via:', document.readyState);
 		console.log('└── Page type:', pageType);
 		
 		// Update user profile with saved data
@@ -544,12 +669,18 @@ async function performAutoFill() {
 				showAutoFillNotification(filledCount, totalCount);
 			} else {
 				console.log('[AutoFill] ⚠️ Automatic filling failed:', result?.message || 'Unknown error');
+				// Réinitialiser le flag en cas d'échec pour permettre une nouvelle tentative
+				hasTriggeredAutoFill = false;
 			}
 		} else {
 			console.error('[AutoFill] AutoFiller not available for automatic filling');
+			// Réinitialiser le flag en cas d'erreur
+			hasTriggeredAutoFill = false;
 		}
 	} catch (error) {
 		console.error('[AutoFill] Error during automatic filling:', error);
+		// Réinitialiser le flag en cas d'erreur
+		hasTriggeredAutoFill = false;
 	}
 }
 
@@ -625,20 +756,97 @@ function showAutoFillNotification(filledCount, totalCount) {
 	}
 }
 
-function initializeWhenReady() {
-	if (document.readyState === "complete") {
-		Logger.info(`Page is ready (${pageType})`);
-		// Perform auto-fill immediately
-		performAutoFill();
-	} else {
-		window.addEventListener("load", () => {
-			Logger.info(`Page loaded (${pageType})`);
-			// Perform auto-fill immediately
-			performAutoFill();
+/**
+ * Initialisation avec séquence d'événements natifs optimisée
+ */
+function initializeWithNativeEvents() {
+	Logger.info(`🚀 Initializing with native events for ${pageType}`);
+
+	// Étape 1: DOMContentLoaded - DOM parsé mais ressources pas forcément chargées
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", () => {
+			Logger.info(`📄 DOMContentLoaded fired for ${pageType}`);
+			handleDOMReady();
 		});
+	} else {
+		// DOM déjà chargé
+		handleDOMReady();
+	}
+
+	// Étape 2: window.load - Toutes les ressources chargées
+	if (document.readyState !== "complete") {
+		window.addEventListener("load", () => {
+			Logger.info(`🎯 Window load event fired for ${pageType}`);
+			handleWindowLoad();
+		});
+	} else {
+		// Page déjà complètement chargée
+		handleWindowLoad();
 	}
 }
 
-initializeWhenReady();
+/**
+ * Gestion de l'événement DOMContentLoaded
+ */
+function handleDOMReady() {
+	Logger.info(`✅ DOM ready detected for ${pageType}`);
+	
+	// Initialiser l'observer dès que le DOM est prêt
+	if (pageType === 'google-forms') {
+		setupGoogleFormsObserver();
+		Logger.info("🔍 Google Forms observer activated early (DOMContentLoaded)");
+	}
+
+	// Tentative de détection précoce des éléments
+	const containers = FormDetector.findQuestionContainers();
+	if (containers.length > 0) {
+		Logger.info(`⚡ Early detection: Found ${containers.length} containers at DOMContentLoaded`);
+		// Marquer comme prêt mais attendre window.load pour l'auto-fill
+		isPageReady = true;
+	} else {
+		Logger.info("⏳ No containers found at DOMContentLoaded, waiting for dynamic content...");
+	}
+}
+
+/**
+ * Gestion de l'événement window.load
+ */
+function handleWindowLoad() {
+	Logger.info(`🎯 Window fully loaded for ${pageType}`);
+	isPageReady = true;
+
+	// Réactiver l'observer si pas encore fait
+	if (pageType === 'google-forms' && !googleFormsObserver) {
+		setupGoogleFormsObserver();
+	}
+
+	// Tentative d'auto-fill immédiate avec délai supplémentaire pour les éléments interactifs
+	if (pageType === 'google-forms' && !hasTriggeredAutoFill) {
+		const containers = FormDetector.findQuestionContainers();
+		if (containers.length > 0) {
+			// Vérifier s'il y a des éléments interactifs (radio, checkbox)
+			const hasInteractiveElements = containers.some(container => {
+				return container.querySelector('[role="radio"], [role="checkbox"]') ||
+				       container.querySelector('input[type="radio"], input[type="checkbox"]');
+			});
+			
+			if (hasInteractiveElements) {
+				Logger.info(`🎯 Interactive elements detected, using extended delay for Google Forms initialization`);
+				// Délai plus long pour permettre à Google Forms d'initialiser complètement ses événements
+				triggerDelayedAutoFill(1500); 
+			} else {
+				Logger.info(`🚀 Immediate auto-fill: Found ${containers.length} containers at window.load`);
+				performAutoFill();
+			}
+		} else {
+			Logger.info("⏳ No containers at window.load, relying on MutationObserver for dynamic content");
+			// Déclencher un auto-fill différé au cas où le contenu se charge après
+			triggerDelayedAutoFill(2000);
+		}
+	}
+}
+
+// Démarrage de l'initialisation
+initializeWithNativeEvents();
 
 
