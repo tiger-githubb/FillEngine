@@ -29,6 +29,9 @@ document.addEventListener("DOMContentLoaded", function () {
   const csvSection = document.getElementById("csvSection");
   const profileSelect = document.getElementById("profileSelect");
   const refreshProfilesBtn = document.getElementById("refreshProfilesBtn");
+  
+  // Auto-fill settings elements
+  const autoFillEnabled = document.getElementById("autoFillEnabled");
 
   console.log("🔧 DOM ELEMENTS FOUND:");
   console.log("├── fillFormBtn:", !!fillFormBtn);
@@ -51,7 +54,7 @@ document.addEventListener("DOMContentLoaded", function () {
     versionKey: "profilesVersion",
     lastUpdateKey: "profilesLastUpdate",
     // Cache expiration: 24 heures en millisecondes
-    cacheExpiration: 24 * 60 * 60 * 1000
+    cacheExpiration: 7 * 24 * 60 * 60 * 1000
   };
 
   // Current user data (will be updated when CSV is loaded or profile selected)
@@ -98,6 +101,40 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   let currentMode = "profiles"; // "profiles" or "csv"
   let availableProfiles = [];
+
+  /**
+   * Load auto-fill settings from storage
+   */
+  async function loadAutoFillSettings() {
+    try {
+      const result = await chrome.storage.local.get('autoFillSettings');
+      const settings = result.autoFillSettings || { enabled: true };
+      
+      autoFillEnabled.checked = settings.enabled;
+      console.log("🔧 Auto-fill settings loaded:", settings);
+      
+      return settings;
+    } catch (error) {
+      console.error("Error loading auto-fill settings:", error);
+      return { enabled: true };
+    }
+  }
+
+  /**
+   * Save auto-fill settings to storage
+   */
+  async function saveAutoFillSettings() {
+    try {
+      const settings = {
+        enabled: autoFillEnabled.checked
+      };
+      
+      await chrome.storage.local.set({ autoFillSettings: settings });
+      console.log("💾 Auto-fill settings saved:", settings);
+    } catch (error) {
+      console.error("Error saving auto-fill settings:", error);
+    }
+  }
 
   /**
    * Save state to chrome storage
@@ -227,7 +264,7 @@ document.addEventListener("DOMContentLoaded", function () {
       // Mise à jour nécessaire si :
       // 1. Pas de version en cache
       // 2. Version de l'extension différente
-      // 3. Cache expiré (24h)
+      // 3. Cache expiré (7j)
       if (!cachedVersion) {
         console.log("📥 Update needed: No cached version");
         return true;
@@ -1168,7 +1205,7 @@ document.addEventListener("DOMContentLoaded", function () {
     showStatus("Chargement du fichier...", "info");
 
     const reader = new FileReader();
-    reader.onload = function (e) {
+    reader.onload = async function (e) {
       try {
         const csvContent = e.target.result;
         console.log("📄 CSV content loaded, parsing...");
@@ -1187,6 +1224,14 @@ document.addEventListener("DOMContentLoaded", function () {
             fallbackUsed: false,
             errorMessage: null
           };
+
+          // Save CSV data to cache for automatic filling
+          try {
+            await chrome.storage.local.set({ lastCsvData: userData });
+            console.log("💾 CSV data saved to cache for auto-fill");
+          } catch (cacheError) {
+            console.warn("Failed to save CSV data to cache:", cacheError);
+          }
 
           // Update profile display
           updateProfileDisplay(userData);
@@ -1553,6 +1598,9 @@ document.addEventListener("DOMContentLoaded", function () {
     // Keep popup open during operations
     keepPopupOpen();
 
+    // Load auto-fill settings
+    await loadAutoFillSettings();
+
     // Vérifier et déclencher le rafraîchissement automatique si nécessaire
     await checkAndTriggerAutoRefresh();
 
@@ -1582,6 +1630,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Add CSV file input handler
     csvFileInput.addEventListener("change", handleCSVFile);
+
+    // Add auto-fill settings handler
+    autoFillEnabled.addEventListener("change", saveAutoFillSettings);
 
     // Add fill form button handler
     fillFormBtn.addEventListener("click", fillForm);
