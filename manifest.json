@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FillEngine",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Extension intelligente pour remplir automatiquement les formulaires Google avec vos données CSV personnalisées",
   "author": "tigerdev",
   "short_name": "FillEngine",
